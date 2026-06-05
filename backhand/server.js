@@ -3,9 +3,12 @@ const cors = require("cors")
 
 const app = express()
 
+// 允许跨域
 app.use(cors())
+// 解析 JSON 请求
 app.use(express.json())
 
+// 模拟数据库
 const players = {
   player1: {
     score: 10000
@@ -13,40 +16,36 @@ const players = {
 }
 
 // 查询积分
-app.get("/api/score/:id", (req,res)=>{
-
+app.get("/api/score/:id", (req, res) => {
   const id = req.params.id
 
-  if(!players[id]){
-
-    players[id] = {
-      score:10000
-    }
+  // 如果玩家不存在，初始化
+  if (!players[id]) {
+    players[id] = { score: 10000 }
   }
 
-  res.json(players[id])
+  res.json({ score: players[id].score })
 })
 
-// 修改积分
-app.post("/api/score/:id",(req,res)=>{
-
+// 修改积分（增减都行）
+app.post("/api/score/:id", (req, res) => {
   const id = req.params.id
+  const delta = Number(req.body.delta) || 0
 
-  const delta = Number(req.body.delta)
-
-  if(!players[id]){
-
-    players[id] = {
-      score:10000
-    }
+  if (!players[id]) {
+    players[id] = { score: 10000 }
   }
 
   players[id].score += delta
 
-  res.json(players[id])
+  // 防止负分
+  if (players[id].score < 0) players[id].score = 0
+
+  res.json({ score: players[id].score })
 })
 
-app.listen(3000,()=>{
-
-  console.log("server start")
+// 端口使用 Render 的环境变量 PORT
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => {
+  console.log(`Server start on port ${PORT}`)
 })
