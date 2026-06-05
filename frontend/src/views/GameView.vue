@@ -90,7 +90,7 @@ import axios from 'axios'
 
 // 玩家与接口地址
 const PLAYER_ID = 'player1'
-const API_URL = window.location.origin
+const API_URL = "https://demo-game-3.onrender.com"
 
 // 游戏状态
 const balance = ref(0)
