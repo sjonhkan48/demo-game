@@ -90,7 +90,7 @@ import axios from 'axios'
 
 // 玩家与接口地址
 const PLAYER_ID = 'player1'
-const API_URL = 'http://localhost:3000' // 发布到 Render 或 Vercel 后改成线上地址
+const API_URL = 'https://demo-game-backend.onrender.com'
 
 // 游戏状态
 const balance = ref(0)
