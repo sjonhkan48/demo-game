@@ -343,4 +343,82 @@ body{ margin:0;}
 
 /* 闪烁动画 */
 @keyframes flash{0%{opacity:1;}50%{opacity:.4;}100%{opacity:1;}}
+  /* 手机适配 */
+@media (max-width: 768px){
+
+  .page{
+    padding:10px;
+  }
+
+  .top-bar{
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .balance-box,
+  .timer-box{
+    font-size:18px;
+    text-align:center;
+  }
+
+  .bet-board{
+    height:280px;
+  }
+
+  .title{
+    font-size:60px;
+  }
+
+  .rate{
+    font-size:18px;
+  }
+
+  .drop-zone{
+    height:120px;
+  }
+
+  .zone-text{
+    font-size:24px;
+  }
+
+  .money{
+    font-size:34px;
+    margin-top:10px;
+  }
+
+  .chip-panel{
+    gap:8px;
+  }
+
+  .chip-panel button{
+    width:60px;
+    height:60px;
+    font-size:14px;
+  }
+
+  .chip-add{
+    width:70px !important;
+    height:70px !important;
+    font-size:18px !important;
+  }
+
+  .chip-input{
+    width:90px;
+    height:40px;
+    font-size:16px;
+  }
+
+  .current-bet{
+    font-size:16px;
+  }
+
+  .selected-chip{
+    font-size:18px;
+  }
+
+  .result-box{
+    font-size:24px;
+  }
+
+}
 </style>
