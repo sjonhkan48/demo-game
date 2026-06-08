@@ -353,88 +353,87 @@ body{ margin:0;}
 
 /* 顶部 */
 .top-bar{
-  flex-direction:row;
-  gap:6px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
 }
 
 .balance-box,
 .timer-box{
-  flex:1;
   font-size:16px;
   padding:10px;
-  text-align:center;
 }
 
-/* 三个投注区 */
+/* 核心修改 */
 .bet-board{
+  display:flex;
+  flex-direction:column;
   height:auto;
-  min-height:auto;
 }
 
 .bet-area{
-  padding-top:15px;
+  min-height:220px;
+  padding-top:20px;
 }
 
 .title{
-  font-size:72px;
+  font-size:70px;
 }
 
 .rate{
-  font-size:16px;
-  padding:4px 8px;
+  font-size:20px;
 }
 
 .drop-zone{
   width:90%;
-  height:140px;
+  height:120px;
 }
 
 .zone-text{
-  font-size:22px;
+  font-size:28px;
 }
 
 .money{
-  font-size:40px;
-  margin-top:8px;
+  font-size:42px;
 }
 
 /* 当前下注 */
 .current-bet{
   font-size:18px;
-  line-height:1.4;
-  padding:10px;
+  margin-top:15px;
 }
 
-/* 筹码区域 */
+/* 筹码 */
 .chip-panel{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
   gap:10px;
-  justify-content:center;
 }
 
 .chip-panel button{
-  width:75px;
-  height:75px;
+  width:100%;
+  height:70px;
+  border-radius:12px;
   font-size:20px;
 }
 
 .chip-input{
-  width:110px;
-  height:50px;
-  font-size:20px;
+  width:100%;
+  height:60px;
 }
 
 .chip-add{
-  width:85px !important;
-  height:85px !important;
-  font-size:20px !important;
+  width:100%!important;
+  height:60px!important;
+  border-radius:12px!important;
 }
 
 .selected-chip{
-  font-size:20px;
+  font-size:18px;
 }
 
 .result-box{
-  font-size:24px;
+  font-size:28px;
 }
 
 }
