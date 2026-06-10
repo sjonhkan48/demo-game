@@ -49,6 +49,9 @@
               <span v-if="b.result==='lose'" class="lose">输</span>
             </td>
           </tr>
+          <tr v-if="bets.length===0">
+            <td colspan="4">暂无投注记录</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -90,17 +93,14 @@ async function loadBalance() {
 }
 
 async function loadBets() {
-  bets.value = await getBets(playerId);
+  const res = await getBets(playerId);
+  bets.value = res.length ? res : [];
 }
 
 async function checkResult() {
   const res = await getGame();
   result.value = res.result;
-  if (res.bettingOpen) {
-    if (locked.value) countdown.value = 20;
-    locked.value = false;
-  } else locked.value = true;
-
+  locked.value = !res.bettingOpen;
   if (res.result !== "等待开奖") {
     await loadBalance();
     await loadBets();
@@ -116,35 +116,30 @@ async function placeBet() {
     alert("请选择下注区域或输入有效金额");
     return;
   }
-  const res = await createBet({ playerId, area: selectedArea.value.label, amount: Number(selectedChip.value) });
+  const res = await createBet({ playerId, area: selectedArea.value.label, amount: selectedChip.value });
   if (res.success) {
     balance.value = res.score;
     await loadBets();
     selectedArea.value = null;
-    alert("下注成功");
   } else {
     alert(res.message);
   }
 }
 
 let timer;
-function startTimer() {
+let resultTimer;
+
+onMounted(async () => {
+  await loadBalance();
+  await loadBets();
+  await checkResult();
   countdown.value = 20;
-  locked.value = false;
   timer = setInterval(() => {
     if (!locked.value) {
       countdown.value--;
       if (countdown.value <= 0) locked.value = true;
     }
   }, 1000);
-}
-
-let resultTimer;
-onMounted(async () => {
-  await loadBalance();
-  await loadBets();
-  await checkResult();
-  startTimer();
   resultTimer = setInterval(checkResult, 3000);
 });
 
@@ -170,11 +165,24 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-.balance { color: #ffd700; }
-.countdown.stop { color: red; }
+.balance {
+  color: #ffd700;
+}
 
-.result-box { text-align: center; font-size: 26px; margin-bottom: 20px; }
-.result-box span { color: #ffd700; font-size: 35px; }
+.countdown.stop {
+  color: red;
+}
+
+.result-box {
+  text-align: center;
+  font-size: 26px;
+  margin-bottom: 20px;
+}
+
+.result-box span {
+  color: #ffd700;
+  font-size: 35px;
+}
 
 .board {
   display: flex;
@@ -193,6 +201,7 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
 }
+
 .area.blue { background: #063b8f; }
 .area.green { background: #16834b; }
 .area.red { background: #9b1212; }
