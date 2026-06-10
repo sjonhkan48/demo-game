@@ -1,7 +1,3 @@
 <template>
-  <GameView />
+  <router-view />
 </template>
-
-<script setup>
-import GameView from './views/GameView.vue'
-</script>
