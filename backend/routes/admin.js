@@ -39,7 +39,7 @@ router.post("/invite", async (req, res) => {
   try {
     const playerId = "player_" + crypto.randomBytes(6).toString("hex");
     const player = await Player.create({ playerId, name: "新玩家", score: 10000 });
-    const url = `https://你的vercel域名/?player=${playerId}`;
+    const url = `https://demo-game-2.onrender.com/?player=${playerId}`;
     res.json({ playerId, url, score: player.score });
   } catch (err) {
     res.status(500).json({ error: err.message });
