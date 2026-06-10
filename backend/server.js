@@ -1,62 +1,81 @@
-const express = require("express")
-const cors = require("cors")
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 
-const app = express()
+const Player = require("./models/player");
+const Bet = require("./models/Bet");
+const adminRouter = require("./routes/admin");
+const game = require("./services/game");
 
-app.use(cors())
-app.use(express.json())
+const app = express();
+app.use(cors({ origin: "*" }));
+app.use(express.json());
 
-// 玩家积分数据
-const players = {
-  player1: {
-    score: 10000
+// ----------------------
+// 连接 MongoDB Atlas
+// ----------------------
+mongoose.connect(
+"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
+)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log("MongoDB connection error:", err));
+
+// ----------------------
+// 获取玩家余额
+// ----------------------
+app.get("/api/score/:id", async (req, res) => {
+  let player = await Player.findOne({ playerId: req.params.id });
+  if (!player) {
+    player = await Player.create({ playerId: req.params.id, name: "玩家", score: 10000 });
   }
-}
+  res.json(player);
+});
 
-// 测试接口
-app.get("/", (req, res) => {
-  res.json({
-    status: "ok",
-    message: "backend running"
-  })
-})
+// ----------------------
+// 玩家下注
+// ----------------------
+app.post("/api/bet", async (req, res) => {
+  try {
+    const { playerId, area, amount } = req.body;
+    if (!playerId || !area || !amount) return res.json({ success: false, message: "下注数据错误" });
 
-// 查询积分
-app.get("/api/score/:id", (req, res) => {
+    const player = await Player.findOne({ playerId });
+    if (!player) return res.json({ success: false, message: "玩家不存在" });
+    if (!game.bettingOpen) return res.json({ success: false, message: "当前停止下注" });
+    if (player.score < amount) return res.json({ success: false, message: "余额不足" });
 
-  const id = req.params.id
+    player.score -= Number(amount);
+    await player.save();
 
-  if (!players[id]) {
-    players[id] = {
-      score: 10000
-    }
+    const bet = await Bet.create({ playerId, area, amount: Number(amount), result: "pending" });
+    res.json({ success: true, score: player.score, bet });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
+});
 
-  res.json(players[id])
-})
+// ----------------------
+// 玩家自己的投注记录
+// ----------------------
+app.get("/api/bets/:playerId", async (req, res) => {
+  const list = await Bet.find({ playerId: req.params.playerId }).sort({ createdAt: -1 });
+  res.json(list);
+});
 
-// 修改积分
-app.post("/api/score/:id", (req, res) => {
+// ----------------------
+// 游戏状态
+// ----------------------
+app.get("/api/result", (req, res) => {
+  res.json({ result: game.gameResult, bettingOpen: game.bettingOpen });
+});
 
-  const id = req.params.id
+// ----------------------
+// 后台路由
+// ----------------------
+app.use("/admin", adminRouter);
 
-  const delta = Number(req.body.delta)
-
-  if (!players[id]) {
-    players[id] = {
-      score: 10000
-    }
-  }
-
-  players[id].score += delta
-
-  res.json(players[id])
-})
-
-const PORT = process.env.PORT || 3000
-
-app.listen(PORT, () => {
-
-  console.log(`server start at port ${PORT}`)
-
-})
+// ----------------------
+// 启动服务
+// ----------------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`server running port ${PORT}`));
