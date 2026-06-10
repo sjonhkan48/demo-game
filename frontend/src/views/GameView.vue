@@ -59,7 +59,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import axios from "axios";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "https://demo-game-3.onrender.com";
 const params = new URLSearchParams(window.location.search);
 const playerId = params.get("player") || "player1";
 
