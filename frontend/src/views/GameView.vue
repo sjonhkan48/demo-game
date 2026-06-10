@@ -2,12 +2,12 @@
   <div class="game-view">
     <div class="header">
       <div class="balance">💰 当前余额：{{ balance }}</div>
-      <div class="countdown" :class="{ stop: !gameOpen }">
-        {{ gameOpen ? "下注倒计时 " + countdown + " 秒" : "停止下注" }}
+      <div class="countdown" :class="{ stop: locked }">
+        {{ locked ? "停止下注" : "下注倒计时 " + countdown + " 秒" }}
       </div>
     </div>
 
-    <div class="result-box">开奖结果：<span>{{ resultText }}</span></div>
+    <div class="result-box">开奖结果：<span>{{ result }}</span></div>
 
     <div class="board">
       <div v-for="area in areas" :key="area.name" class="area" :class="area.color" @click="selectArea(area)">
@@ -24,7 +24,7 @@
     <div class="selected">
       当前筹码：{{ selectedChip }}<br />
       当前下注：{{ selectedArea ? selectedArea.label : "未选择" }}<br />
-      <button @click="placeBet" :disabled="!gameOpen || !selectedArea">确认下注</button>
+      <button @click="placeBet" :disabled="locked || !selectedArea">确认下注</button>
     </div>
 
     <div class="records">
@@ -56,272 +56,103 @@
 </template>
 
 <script setup>
+import { ref, onMounted, onUnmounted } from "vue";
+import { getScore, getBets, createBet, getGame } from "../services/api";
 
-import {
-ref,
-onMounted,
-onUnmounted
+const params = new URLSearchParams(window.location.search);
+const playerId = params.get("player") || "player1";
 
-} from "vue";
+const balance = ref(0);
+const countdown = ref(30); // 倒计时延长到30秒
+const locked = ref(false);
+const result = ref("等待开奖");
+const bets = ref([]);
+const selectedArea = ref(null);
+const selectedChip = ref(100);
 
-
-import {
-
-getScore,
-getBets,
-createBet,
-getGame
-
-} from "../services/api";
-
-
-
-
-const playerId=
-new URLSearchParams(location.search)
-.get("player")
-||
-"player1";
-
-
-
-const balance=ref(0);
-
-
-const countdown=ref(30);
-
-
-const locked=ref(false);
-
-
-const result=ref("等待开奖");
-
-
-const bets=ref([]);
-
-
-
-const selectedArea=ref(null);
-
-
-const selectedChip=ref(100);
-
-
-
-
-
-const areas=[
-
-{
-label:"闲",
-color:"blue",
-odds:1
-},
-
-{
-label:"和",
-color:"green",
-odds:8
-},
-
-{
-label:"庄",
-color:"red",
-odds:0.95
-}
-
+const areas = [
+  { name: "xian", label: "闲", color: "blue", odds: 1 },
+  { name: "he", label: "和", color: "green", odds: 8 },
+  { name: "zhuang", label: "庄", color: "red", odds: 0.95 },
 ];
 
-
-
-
-
-const chips=[
-
-{
-value:10,
-color:"red"
-},
-
-{
-value:50,
-color:"blue"
-},
-
-{
-value:100,
-color:"green"
-},
-
-{
-value:500,
-color:"purple"
-},
-
-{
-value:1000,
-color:"black"
-}
-
+const chips = [
+  { value: 10, color: "red" },
+  { value: 50, color: "blue" },
+  { value: 100, color: "green" },
+  { value: 500, color: "purple" },
+  { value: 1000, color: "black" },
 ];
 
+async function load() {
+  // 获取玩家余额
+  const s = await getScore(playerId);
+  balance.value = s.score;
 
+  // 获取投注记录
+  const b = await getBets(playerId);
+  bets.value = b.reverse();
 
+  // 获取当前开奖结果
+  const g = await getGame();
+  result.value = g.result || "等待开奖";
 
-
-
-async function refresh(){
-
-
-
-let s=
-await getScore(playerId);
-
-
-balance.value=s.score;
-
-
-
-
-let b=
-await getBets(playerId);
-
-
-bets.value=b;
-
-
-
-
-let g=
-await getGame();
-
-
-
-countdown.value=g.countdown;
-
-
-result.value=g.result;
-
-
-
-locked.value=
-g.status!=="betting";
-
-
-
+  locked.value = g.result ? true : false;
 }
 
-
-
-
-
-
-
-function selectArea(a){
-
-
-if(!locked.value)
-
-selectedArea.value=a;
-
-
+function selectArea(area) {
+  if (!locked.value) selectedArea.value = area;
 }
 
+async function placeBet() {
+  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
+    alert("请选择下注区域或输入有效金额");
+    return;
+  }
+  const res = await createBet({
+    playerId,
+    area: selectedArea.value.label,
+    amount: Number(selectedChip.value),
+  });
 
+  if (res.success) {
+    balance.value = res.score;
+    await load();
+    selectedArea.value = null;
+  } else {
+    alert(res.message);
+  }
+}
 
+let timer, countdownTimer;
 
+onMounted(() => {
+  load();
 
+  // 每3秒刷新数据
+  timer = setInterval(load, 3000);
 
-
-
-async function placeBet(){
-
-
-if(!selectedArea.value)return;
-
-
-
-let res=
-await createBet({
-
-playerId,
-
-area:selectedArea.value.label,
-
-amount:selectedChip.value
-
-
+  // 倒计时逻辑
+  countdown.value = 30;
+  countdownTimer = setInterval(() => {
+    if (!locked.value) {
+      countdown.value--;
+      if (countdown.value <= 0) {
+        locked.value = true;
+        countdown.value = 0;
+      }
+    }
+  }, 1000);
 });
 
-
-
-if(res.success){
-
-
-balance.value=res.score;
-
-
-selectedArea.value=null;
-
-
-refresh();
-
-
-}else{
-
-
-alert(res.message);
-
-
-}
-
-
-
-}
-
-
-
-
-
-let timer;
-
-
-onMounted(()=>{
-
-
-refresh();
-
-
-
-timer=setInterval(()=>{
-
-
-refresh();
-
-
-
-},1000);
-
-
-
+onUnmounted(() => {
+  clearInterval(timer);
+  clearInterval(countdownTimer);
 });
-
-
-
-onUnmounted(()=>{
-
-
-clearInterval(timer);
-
-
-});
-
-
-
 </script>
 
 <style scoped>
-/* UI保持你之前绿色风格 */
+/* 保持现有UI样式 */
 .game-view {
   padding: 15px;
   font-family: "Microsoft YaHei";
@@ -329,16 +160,20 @@ clearInterval(timer);
   background: linear-gradient(#07351f, #02160d);
   color: #fff;
 }
+
 .header {
   display: flex;
   justify-content: space-between;
   font-size: 22px;
   margin-bottom: 20px;
 }
+
 .balance { color: #ffd700; }
 .countdown.stop { color: red; }
+
 .result-box { text-align: center; font-size: 26px; margin-bottom: 20px; }
 .result-box span { color: #ffd700; font-size: 35px; }
+
 .board {
   display: flex;
   height: 230px;
@@ -347,6 +182,7 @@ clearInterval(timer);
   overflow: hidden;
   margin-bottom: 20px;
 }
+
 .area {
   flex: 1;
   display: flex;
@@ -358,8 +194,10 @@ clearInterval(timer);
 .area.blue { background: #063b8f; }
 .area.green { background: #16834b; }
 .area.red { background: #9b1212; }
+
 .name { font-size: 55px; font-weight: bold; }
 .odds { font-size: 18px; }
+
 .chips {
   display: flex;
   gap: 12px;
@@ -383,12 +221,16 @@ clearInterval(timer);
 .chip.green { background: #1b8d35; }
 .chip.purple { background: #7020a0; }
 .chip.black { background: #111; }
+
 input[type="number"] { width: 80px; margin-left: 10px; padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
+
 .selected { text-align: center; font-size: 20px; margin-bottom: 20px; }
+
 .records table { width: 100%; border-collapse: collapse; }
 .records td, .records th { border: 1px solid #777; padding: 8px; text-align: center; }
 .win { color: #00ff88; }
 .lose { color: red; }
+
 @media (max-width: 600px) {
   .name { font-size: 40px; }
   .board { height: 180px; }
