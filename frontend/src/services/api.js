@@ -1,6 +1,6 @@
 import axios from "axios"
 
-export const API_URL = "http://localhost:3000"
+export const API_URL = "https://demo-game-3.onrender.com"
 
 export async function getScore(playerId) {
   const res = await axios.get(
