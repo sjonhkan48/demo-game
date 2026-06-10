@@ -6,7 +6,12 @@ const cors = require("cors");
 const Player = require("./models/player");
 const Bet = require("./models/Bet");
 const adminRouter = require("./routes/admin");
-const game = require("./services/game");
+const {
+game,
+openResult,
+nextRound
+
+}=require("./services/game");
 
 const app = express();
 
@@ -84,9 +89,25 @@ app.get("/api/bets/:playerId", async (req, res) => {
 // ----------------------
 // 游戏状态
 // ----------------------
-app.get("/api/result", (req, res) => {
-  res.json({ result: game.gameResult, bettingOpen: game.bettingOpen });
-});
+app.get("/api/result",(req,res)=>{
+
+
+res.json({
+
+
+result:game.result,
+
+
+bettingOpen:game.bettingOpen,
+
+
+time:game.time
+
+
+})
+
+
+})
 
 // ----------------------
 // 后台管理路由
