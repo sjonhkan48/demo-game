@@ -110,7 +110,11 @@ async function invite() {
 }
 
 function openLink(p) {
-  window.open(`http://localhost:5173/?player=${p.playerId}`);
+
+window.open(
+`https://demo-game-2.onrender.com/?player=${p.playerId}`
+)
+
 }
 
 async function openGame() {
