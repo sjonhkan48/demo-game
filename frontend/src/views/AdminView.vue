@@ -2,7 +2,6 @@
   <div class="admin">
     <h1>后台管理系统</h1>
 
-    <!-- 游戏控制 -->
     <div class="game-box">
       <h2>游戏控制</h2>
       <p>当前状态：{{ status }}</p>
@@ -16,7 +15,6 @@
       <button @click="nextRound">下一轮</button>
     </div>
 
-    <!-- 邀请玩家 -->
     <div class="invite">
       <button @click="invite">生成玩家邀请链接</button>
       <div v-if="inviteUrl">
@@ -25,7 +23,6 @@
       </div>
     </div>
 
-    <!-- 玩家管理 -->
     <h2>玩家管理</h2>
     <table>
       <thead>
@@ -49,7 +46,6 @@
       </tbody>
     </table>
 
-    <!-- 开奖记录 -->
     <h2>开奖记录</h2>
     <table>
       <thead>
@@ -65,7 +61,7 @@
           <td>{{ r.playerId }}</td>
           <td>{{ r.area }}</td>
           <td>{{ r.amount }}</td>
-          <td>{{ r.result }}</td>
+          <td>{{ r.result === 'pending' ? '等待开奖' : r.result === 'win' ? '赢' : '输' }}</td>
         </tr>
       </tbody>
     </table>
@@ -76,7 +72,7 @@
 import { ref, onMounted } from "vue";
 import axios from "axios";
 
-const API = "https://demo-game-3.onrender.com";
+const API = "https://demo-game-2.onrender.com";
 
 const players = ref([]);
 const records = ref([]);
@@ -110,17 +106,11 @@ async function invite() {
 }
 
 function openLink(p) {
-
-window.open(
-`https://demo-game-2.onrender.com/?player=${p.playerId}`
-)
-
+  window.open(`/?player=${p.playerId}`);
 }
 
 async function openGame() {
-  const res = await axios.post(`${API}/admin/open`, {
-    result: openResult.value,
-  });
+  const res = await axios.post(`${API}/admin/open`, { result: openResult.value });
   result.value = res.data.result;
   status.value = "开奖完成";
   loadRecords();
