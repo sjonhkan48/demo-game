@@ -15,10 +15,17 @@ app.use(express.json());
 // 连接 MongoDB Atlas
 // ----------------------
 mongoose.connect(
-"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
+  "mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
 )
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log("MongoDB connection error:", err));
+
+// ----------------------
+// 首页检测
+// ----------------------
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "backend running" });
+});
 
 // ----------------------
 // 获取玩家余额
