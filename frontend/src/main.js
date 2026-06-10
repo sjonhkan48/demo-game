@@ -1,5 +1,5 @@
-// frontend/src/main.js
-import { createApp } from 'vue'
-import GameView from './views/GameView.vue'
+import { createApp } from "vue"
+import App from "./App.vue"
+import router from "./router"
 
-createApp(GameView).mount('#app')
+createApp(App).use(router).mount("#app")
