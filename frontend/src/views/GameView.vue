@@ -62,7 +62,7 @@ import { getScore, getBets, createBet, getGame } from "../services/api";
 const params = new URLSearchParams(window.location.search);
 const playerId = params.get("player") || "player1";
 
-const balance = ref(0);
+const balance = ref(1000);
 const countdown = ref(20);
 const locked = ref(false);
 const result = ref("等待开奖");
@@ -89,12 +89,12 @@ async function load() {
   balance.value = s.score;
 
   const b = await getBets(playerId);
-  bets.value = b.reverse(); // 最新在上
+  bets.value = b.reverse();
 
   const g = await getGame();
   result.value = g.result || "等待开奖";
 
-  locked.value = g.result ? true : false;
+  locked.value = g.result && g.result !== "等待开奖";
 }
 
 function selectArea(area) {
@@ -106,6 +106,7 @@ async function placeBet() {
     alert("请选择下注区域或输入有效金额");
     return;
   }
+
   const res = await createBet({
     playerId,
     area: selectedArea.value.label,
@@ -124,7 +125,7 @@ async function placeBet() {
 let timer;
 onMounted(() => {
   load();
-  timer = setInterval(load, 3000); // 每3秒刷新
+  timer = setInterval(load, 3000);
 });
 onUnmounted(() => {
   clearInterval(timer);
@@ -132,85 +133,33 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 保持原UI样式 */
-.game-view {
-  padding: 15px;
-  font-family: "Microsoft YaHei";
-  min-height: 100vh;
-  background: linear-gradient(#07351f, #02160d);
-  color: #fff;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 22px;
-  margin-bottom: 20px;
-}
-
+/* 恢复原UI样式 */
+.game-view { padding: 15px; font-family: "Microsoft YaHei"; min-height: 100vh; background: #043a1f; color: #fff; }
+.header { display: flex; justify-content: space-between; font-size: 22px; margin-bottom: 20px; }
 .balance { color: #ffd700; }
 .countdown.stop { color: red; }
-
 .result-box { text-align: center; font-size: 26px; margin-bottom: 20px; }
 .result-box span { color: #ffd700; font-size: 35px; }
-
-.board {
-  display: flex;
-  height: 230px;
-  border: 5px solid #c99b27;
-  border-radius: 25px;
-  overflow: hidden;
-  margin-bottom: 20px;
-}
-
-.area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-}
+.board { display: flex; height: 230px; border: 5px solid #c99b27; border-radius: 25px; overflow: hidden; margin-bottom: 20px; }
+.area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
 .area.blue { background: #063b8f; }
 .area.green { background: #16834b; }
 .area.red { background: #9b1212; }
-
 .name { font-size: 55px; font-weight: bold; }
 .odds { font-size: 18px; }
-
-.chips {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.chip {
-  width: 65px;
-  height: 65px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 5px dashed white;
-  font-weight: bold;
-  cursor: pointer;
-}
+.chips { display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+.chip { width: 65px; height: 65px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 5px dashed white; font-weight: bold; cursor: pointer; }
 .chip.red { background: #d11; }
 .chip.blue { background: #1769aa; }
 .chip.green { background: #1b8d35; }
 .chip.purple { background: #7020a0; }
 .chip.black { background: #111; }
-
 input[type="number"] { width: 80px; margin-left: 10px; padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
-
 .selected { text-align: center; font-size: 20px; margin-bottom: 20px; }
-
 .records table { width: 100%; border-collapse: collapse; }
 .records td, .records th { border: 1px solid #777; padding: 8px; text-align: center; }
 .win { color: #00ff88; }
 .lose { color: red; }
-
 @media (max-width: 600px) {
   .name { font-size: 40px; }
   .board { height: 180px; }
