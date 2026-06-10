@@ -5,6 +5,6 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   build: {
-    outDir: 'frontend/dist'
+    outDir: 'dist' // 不要再加 frontend/ 前缀
   }
 })
