@@ -3,9 +3,9 @@ const router = express.Router();
 const crypto = require("crypto");
 const Player = require("../models/player");
 const Bet = require("../models/Bet");
-const game = require("../services/game");
+const { game } = require("../services/game");
 
-// 玩家列表
+// 获取玩家列表
 router.get("/players", async (req, res) => {
   try {
     const players = await Player.find({}).sort({ createdAt: -1 });
@@ -15,17 +15,13 @@ router.get("/players", async (req, res) => {
   }
 });
 
-// 修改玩家名称或积分
+// 修改玩家信息
 router.post("/player/:id", async (req, res) => {
   try {
     const { name, score } = req.body;
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (score !== undefined) updateData.score = score;
-
     const player = await Player.findOneAndUpdate(
       { playerId: req.params.id },
-      updateData,
+      { name, score },
       { new: true }
     );
     res.json(player);
@@ -39,6 +35,7 @@ router.post("/invite", async (req, res) => {
   try {
     const playerId = "player_" + crypto.randomBytes(6).toString("hex");
     const player = await Player.create({ playerId, name: "新玩家", score: 10000 });
+    // 指向前端静态站点 URL
     const url = `https://demo-game-2.onrender.com/?player=${playerId}`;
     res.json({ playerId, url, score: player.score });
   } catch (err) {
@@ -50,8 +47,10 @@ router.post("/invite", async (req, res) => {
 router.post("/open", async (req, res) => {
   try {
     const { result } = req.body;
-    const finalResult = await game.openGame(result);
-    res.json({ success: true, result: finalResult });
+    game.result = result;
+    game.bettingOpen = false;
+    game.time = 0;
+    res.json({ success: true, result: game.result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -60,14 +59,16 @@ router.post("/open", async (req, res) => {
 // 开启下一轮
 router.post("/next", async (req, res) => {
   try {
-    game.newRound();
-    res.json({ success: true, message: "新一轮开始" });
+    game.result = "等待开奖";
+    game.bettingOpen = true;
+    game.time = 20;
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 后台全部开奖记录
+// 后台获取全部开奖记录
 router.get("/records", async (req, res) => {
   try {
     const records = await Bet.find({}).sort({ createdAt: -1 });
