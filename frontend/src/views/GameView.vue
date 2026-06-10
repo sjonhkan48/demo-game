@@ -56,91 +56,268 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import { getScore, getBets, createBet } from "../services/api";
 
-const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player") || "player1";
+import {
+ref,
+onMounted,
+onUnmounted
 
-const balance = ref(0);
-const countdown = ref(30);
-const gameOpen = ref(true);
-const resultText = ref("等待开奖");
-const bets = ref([]);
-const selectedArea = ref(null);
-const selectedChip = ref(100);
+} from "vue";
 
-const areas = [
-  { name: "xian", label: "闲", color: "blue", odds: 1 },
-  { name: "he", label: "和", color: "green", odds: 8 },
-  { name: "zhuang", label: "庄", color: "red", odds: 0.95 },
+
+import {
+
+getScore,
+getBets,
+createBet,
+getGame
+
+} from "../services/api";
+
+
+
+
+const playerId=
+new URLSearchParams(location.search)
+.get("player")
+||
+"player1";
+
+
+
+const balance=ref(0);
+
+
+const countdown=ref(30);
+
+
+const locked=ref(false);
+
+
+const result=ref("等待开奖");
+
+
+const bets=ref([]);
+
+
+
+const selectedArea=ref(null);
+
+
+const selectedChip=ref(100);
+
+
+
+
+
+const areas=[
+
+{
+label:"闲",
+color:"blue",
+odds:1
+},
+
+{
+label:"和",
+color:"green",
+odds:8
+},
+
+{
+label:"庄",
+color:"red",
+odds:0.95
+}
+
 ];
 
-const chips = [
-  { value: 10, color: "red" },
-  { value: 50, color: "blue" },
-  { value: 100, color: "green" },
-  { value: 500, color: "purple" },
-  { value: 1000, color: "black" },
+
+
+
+
+const chips=[
+
+{
+value:10,
+color:"red"
+},
+
+{
+value:50,
+color:"blue"
+},
+
+{
+value:100,
+color:"green"
+},
+
+{
+value:500,
+color:"purple"
+},
+
+{
+value:1000,
+color:"black"
+}
+
 ];
 
-async function load() {
-  const s = await getScore(playerId);
-  balance.value = s.score;
-  const b = await getBets(playerId);
-  bets.value = b.reverse();
 
-  const g = await fetch("/api/game").then(r => r.json());
-  resultText.value = g.result;
-  gameOpen.value = g.open;
-  if (gameOpen.value) countdown.value = 30;
+
+
+
+
+async function refresh(){
+
+
+
+let s=
+await getScore(playerId);
+
+
+balance.value=s.score;
+
+
+
+
+let b=
+await getBets(playerId);
+
+
+bets.value=b;
+
+
+
+
+let g=
+await getGame();
+
+
+
+countdown.value=g.countdown;
+
+
+result.value=g.result;
+
+
+
+locked.value=
+g.status!=="betting";
+
+
+
 }
 
-function selectArea(area) {
-  if (gameOpen.value) selectedArea.value = area;
+
+
+
+
+
+
+function selectArea(a){
+
+
+if(!locked.value)
+
+selectedArea.value=a;
+
+
 }
 
-async function placeBet() {
-  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
-    alert("请选择下注区域或输入有效金额");
-    return;
-  }
-  const res = await createBet({
-    playerId,
-    area: selectedArea.value.label,
-    amount: Number(selectedChip.value),
-  });
-  if (res.success) {
-    balance.value = res.score;
-    await load();
-    selectedArea.value = null;
-  } else {
-    alert(res.message);
-  }
+
+
+
+
+
+
+
+async function placeBet(){
+
+
+if(!selectedArea.value)return;
+
+
+
+let res=
+await createBet({
+
+playerId,
+
+area:selectedArea.value.label,
+
+amount:selectedChip.value
+
+
+});
+
+
+
+if(res.success){
+
+
+balance.value=res.score;
+
+
+selectedArea.value=null;
+
+
+refresh();
+
+
+}else{
+
+
+alert(res.message);
+
+
 }
 
-// 倒计时计时器
+
+
+}
+
+
+
+
+
 let timer;
-function startTimer() {
-  timer = setInterval(() => {
-    if (!gameOpen.value) return;
-    countdown.value--;
-    if (countdown.value <= 0) {
-      countdown.value = 0;
-      gameOpen.value = false;
-    }
-  }, 1000);
-}
 
-onMounted(() => {
-  load();
-  startTimer();
-  setInterval(load, 3000); // 投注记录与结果每3秒同步
+
+onMounted(()=>{
+
+
+refresh();
+
+
+
+timer=setInterval(()=>{
+
+
+refresh();
+
+
+
+},1000);
+
+
+
 });
 
-onUnmounted(() => {
-  clearInterval(timer);
+
+
+onUnmounted(()=>{
+
+
+clearInterval(timer);
+
+
 });
+
+
+
 </script>
 
 <style scoped>
