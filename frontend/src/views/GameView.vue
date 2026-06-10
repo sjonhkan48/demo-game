@@ -1,3 +1,152 @@
+<template>
+
+<div class="game">
+
+
+<h2>
+💰 当前余额：
+{{ balance }}
+</h2>
+
+
+<h1>
+开奖结果：
+<span>
+{{ result }}
+</span>
+</h1>
+
+
+
+<div class="areas">
+
+<div
+v-for="a in areas"
+:key="a.label"
+class="area"
+:class="a.color"
+@click="selectArea(a)"
+>
+
+<h1>{{a.label}}</h1>
+
+<p>
+赔率 {{a.odds}}
+</p>
+
+
+</div>
+
+
+</div>
+
+
+
+<div class="chips">
+
+
+<button
+v-for="c in chips"
+:key="c"
+@click="selectedChip=c"
+>
+
+{{c}}
+
+</button>
+
+
+</div>
+
+
+
+<h3>
+当前筹码：
+{{selectedChip}}
+</h3>
+
+
+
+<h3>
+当前下注：
+{{selectedArea?.label || '未选择'}}
+</h3>
+
+
+
+<button
+@click="placeBet"
+:disabled="locked"
+>
+
+确认下注
+
+</button>
+
+
+
+
+<h2>
+投注记录
+</h2>
+
+
+<table>
+
+
+<tr>
+
+<th>
+区域
+</th>
+
+<th>
+金额
+</th>
+
+<th>
+结果
+</th>
+
+</tr>
+
+
+
+<tr
+v-for="b in bets"
+:key="b._id"
+>
+
+
+<td>
+{{b.area}}
+</td>
+
+
+<td>
+{{b.amount}}
+</td>
+
+
+<td>
+{{b.result}}
+</td>
+
+
+</tr>
+
+
+
+</table>
+
+
+</div>
+
+
+</template>
+
+
+
 <script setup>
 
 
@@ -9,11 +158,13 @@ onUnmounted
 from "vue"
 
 
+
 import {
 getScore,
 getBets,
 createBet,
 getGame
+
 }
 from "../services/api"
 
@@ -32,27 +183,33 @@ params.get("player")
 
 
 
-const balance=ref(0)
-
-
-const countdown=ref(20)
-
-
-const locked=ref(false)
-
-
-const result=ref("等待开奖")
+const balance =
+ref(0)
 
 
 
-const bets=ref([])
+const result =
+ref("等待开奖")
 
 
 
-const selectedArea=ref(null)
+const bets =
+ref([])
 
 
-const selectedChip=ref(100)
+
+const locked =
+ref(false)
+
+
+
+const selectedArea =
+ref(null)
+
+
+
+const selectedChip =
+ref(100)
 
 
 
@@ -76,7 +233,6 @@ color:"red",
 odds:0.95
 }
 
-
 ]
 
 
@@ -92,41 +248,38 @@ const chips=[
 
 
 
+
 async function load(){
 
 
-let p =
+const p =
 await getScore(playerId)
 
 
-balance.value=p.score
+balance.value =
+p.score
 
 
 
-let b =
+bets.value =
 await getBets(playerId)
 
 
-bets.value=b
 
-
-
-let g =
+const g =
 await getGame()
 
 
-result.value=g.result
+result.value =
+g.result
 
 
-countdown.value=g.time
-
-
-locked.value=
+locked.value =
 !g.bettingOpen
 
 
-
 }
+
 
 
 
@@ -140,8 +293,8 @@ if(!locked.value)
 selectedArea.value=a
 
 
-
 }
+
 
 
 
@@ -150,13 +303,17 @@ selectedArea.value=a
 async function placeBet(){
 
 
-if(!selectedArea.value)
+if(!selectedArea.value){
 
-return alert("请选择区域")
+alert("请选择区域")
+
+return
+
+}
 
 
 
-let res =
+const res =
 await createBet({
 
 playerId,
@@ -164,7 +321,6 @@ playerId,
 area:selectedArea.value.label,
 
 amount:selectedChip.value
-
 
 })
 
@@ -180,11 +336,10 @@ bets.value=
 await getBets(playerId)
 
 
+}
 
-alert("下注成功")
 
-
-}else{
+else{
 
 
 alert(res.message)
@@ -209,12 +364,13 @@ onMounted(()=>{
 load()
 
 
-
-timer=setInterval(load,1000)
+timer=setInterval(
+load,
+1000
+)
 
 
 })
-
 
 
 
@@ -227,5 +383,106 @@ clearInterval(timer)
 })
 
 
-
 </script>
+
+
+
+<style scoped>
+
+
+.game{
+
+padding:30px;
+
+font-family:"Microsoft YaHei";
+
+}
+
+
+
+.areas{
+
+display:flex;
+
+height:220px;
+
+}
+
+
+
+.area{
+
+flex:1;
+
+display:flex;
+
+flex-direction:column;
+
+align-items:center;
+
+justify-content:center;
+
+color:white;
+
+font-size:30px;
+
+cursor:pointer;
+
+}
+
+
+
+.blue{
+
+background:#12459b;
+
+}
+
+
+
+.green{
+
+background:green;
+
+}
+
+
+
+.red{
+
+background:#a80000;
+
+}
+
+
+
+
+.chips button{
+
+margin:10px;
+
+padding:10px 20px;
+
+}
+
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+}
+
+
+td,th{
+
+border:1px solid #ccc;
+
+padding:10px;
+
+}
+
+
+
+</style>
