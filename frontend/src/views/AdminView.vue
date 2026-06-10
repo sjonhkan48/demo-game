@@ -76,7 +76,7 @@
 import { ref, onMounted } from "vue";
 import axios from "axios";
 
-const API = "http://localhost:3000";
+const API = "https://demo-game-3.onrender.com";
 
 const players = ref([]);
 const records = ref([]);
