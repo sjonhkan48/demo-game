@@ -1,74 +1,31 @@
-import axios from "axios"
+const API = "";
 
-
-export const API_URL =
-"https://demo-game-3.onrender.com"
-
-
-
-export async function getScore(playerId){
-
-
-const res =
-await axios.get(
-`${API_URL}/api/score/${playerId}`
-)
-
-
-return res.data
-
+export async function getScore(id){
+  const res = await fetch(`${API}/api/score/${id}`);
+  return await res.json();
 }
 
 
-
+export async function getBets(id){
+  const res = await fetch(`${API}/api/bets/${id}`);
+  return await res.json();
+}
 
 
 export async function createBet(data){
+  const res = await fetch(`${API}/api/bet`,{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify(data)
+  });
 
-
-const res =
-await axios.post(
-`${API_URL}/api/bet`,
-data
-)
-
-
-return res.data
-
-
+  return await res.json();
 }
-
-
-
-
-
-export async function getBets(playerId){
-
-
-const res =
-await axios.get(
-`${API_URL}/api/bets/${playerId}`
-)
-
-
-return res.data
-
-
-}
-
-
 
 
 export async function getGame(){
-
-
-const res =
-await axios.get(
-`${API_URL}/api/result`
-)
-
-
-return res.data
-
-
+  const res = await fetch(`${API}/api/game`);
+  return await res.json();
 }
