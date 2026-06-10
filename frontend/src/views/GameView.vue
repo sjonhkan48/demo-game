@@ -2,12 +2,12 @@
   <div class="game-view">
     <div class="header">
       <div class="balance">💰 当前余额：{{ balance }}</div>
-      <div class="countdown" :class="{ stop: locked }">
-        {{ locked ? "停止下注" : "下注倒计时 " + countdown + " 秒" }}
+      <div class="countdown" :class="{ stop: !gameOpen }">
+        {{ gameOpen ? "下注倒计时 " + countdown + " 秒" : "停止下注" }}
       </div>
     </div>
 
-    <div class="result-box">开奖结果：<span>{{ result }}</span></div>
+    <div class="result-box">开奖结果：<span>{{ resultText }}</span></div>
 
     <div class="board">
       <div v-for="area in areas" :key="area.name" class="area" :class="area.color" @click="selectArea(area)">
@@ -24,7 +24,7 @@
     <div class="selected">
       当前筹码：{{ selectedChip }}<br />
       当前下注：{{ selectedArea ? selectedArea.label : "未选择" }}<br />
-      <button @click="placeBet" :disabled="locked || !selectedArea">确认下注</button>
+      <button @click="placeBet" :disabled="!gameOpen || !selectedArea">确认下注</button>
     </div>
 
     <div class="records">
@@ -56,315 +56,151 @@
 </template>
 
 <script setup>
+import { ref, onMounted, onUnmounted } from "vue";
+import { getScore, getBets, createBet } from "../services/api";
 
-import {
-ref,
-onMounted,
-onUnmounted
-} from "vue";
+const params = new URLSearchParams(window.location.search);
+const playerId = params.get("player") || "player1";
 
+const balance = ref(0);
+const countdown = ref(30);
+const gameOpen = ref(true);
+const resultText = ref("等待开奖");
+const bets = ref([]);
+const selectedArea = ref(null);
+const selectedChip = ref(100);
 
-import {
-getScore,
-getBets,
-createBet
-} from "../services/api";
-
-
-
-const params =
-new URLSearchParams(
-window.location.search
-);
-
-
-const playerId =
-params.get("player") || "player1";
-
-
-
-const balance=ref(0);
-
-
-const countdown=ref(30);
-
-
-const locked=ref(false);
-
-
-
-const result=
-ref("等待开奖");
-
-
-
-const bets=ref([]);
-
-
-
-const selectedArea=ref(null);
-
-
-
-const selectedChip=
-ref(100);
-
-
-
-
-
-const areas=[
-
-{
-name:"xian",
-label:"闲",
-color:"blue",
-odds:1
-},
-
-{
-name:"he",
-label:"和",
-color:"green",
-odds:8
-},
-
-{
-name:"zhuang",
-label:"庄",
-color:"red",
-odds:0.95
-}
-
+const areas = [
+  { name: "xian", label: "闲", color: "blue", odds: 1 },
+  { name: "he", label: "和", color: "green", odds: 8 },
+  { name: "zhuang", label: "庄", color: "red", odds: 0.95 },
 ];
 
-
-
-
-const chips=[
-
-{value:10,color:"red"},
-
-{value:50,color:"blue"},
-
-{value:100,color:"green"},
-
-{value:500,color:"purple"},
-
-{value:1000,color:"black"}
-
+const chips = [
+  { value: 10, color: "red" },
+  { value: 50, color: "blue" },
+  { value: 100, color: "green" },
+  { value: 500, color: "purple" },
+  { value: 1000, color: "black" },
 ];
 
+async function load() {
+  const s = await getScore(playerId);
+  balance.value = s.score;
+  const b = await getBets(playerId);
+  bets.value = b.reverse();
 
-
-
-
-async function load(){
-
-
-let s =
-await getScore(playerId);
-
-
-balance.value =
-s.score;
-
-
-
-let b =
-await getBets(playerId);
-
-
-bets.value=b;
-
-
-
-
-let res =
-await fetch(
-"/api/game"
-);
-
-
-let game =
-await res.json();
-
-
-
-result.value =
-game.result;
-
-
-
-locked.value =
-!game.open;
-
-
-
+  const g = await fetch("/api/game").then(r => r.json());
+  resultText.value = g.result;
+  gameOpen.value = g.open;
+  if (gameOpen.value) countdown.value = 30;
 }
 
-
-
-
-
-
-function selectArea(area){
-
-
-if(!locked.value){
-
-selectedArea.value=area;
-
+function selectArea(area) {
+  if (gameOpen.value) selectedArea.value = area;
 }
 
+async function placeBet() {
+  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
+    alert("请选择下注区域或输入有效金额");
+    return;
+  }
+  const res = await createBet({
+    playerId,
+    area: selectedArea.value.label,
+    amount: Number(selectedChip.value),
+  });
+  if (res.success) {
+    balance.value = res.score;
+    await load();
+    selectedArea.value = null;
+  } else {
+    alert(res.message);
+  }
 }
 
-
-
-
-
-
-
-async function placeBet(){
-
-
-if(!selectedArea.value)
-return;
-
-
-
-let res =
-await createBet({
-
-playerId,
-
-area:selectedArea.value.label,
-
-amount:selectedChip.value
-
-});
-
-
-
-if(res.success){
-
-
-balance.value =
-res.score;
-
-
-
-selectedArea.value=null;
-
-
-
-load();
-
-}
-
-
-}
-
-
-
-
-
-
-// 倒计时
-
-
+// 倒计时计时器
 let timer;
-
-
-
-function startTimer(){
-
-
-timer=setInterval(()=>{
-
-
-if(!locked.value){
-
-
-countdown.value--;
-
-
-
-if(countdown.value<=0){
-
-
-locked.value=true;
-
-countdown.value=0;
-
-
+function startTimer() {
+  timer = setInterval(() => {
+    if (!gameOpen.value) return;
+    countdown.value--;
+    if (countdown.value <= 0) {
+      countdown.value = 0;
+      gameOpen.value = false;
+    }
+  }, 1000);
 }
 
-
-}
-
-
-
-},1000)
-
-
-
-}
-
-
-
-
-
-onMounted(()=>{
-
-
-load();
-
-
-startTimer();
-
-
-
-setInterval(()=>{
-
-load();
-
-},3000)
-
-
-
+onMounted(() => {
+  load();
+  startTimer();
+  setInterval(load, 3000); // 投注记录与结果每3秒同步
 });
 
-
-
-
-onUnmounted(()=>{
-
-clearInterval(timer);
-
+onUnmounted(() => {
+  clearInterval(timer);
 });
-
-
-
 </script>
 
 <style scoped>
-/* 恢复原UI样式 */
-.game-view { padding: 15px; font-family: "Microsoft YaHei"; min-height: 100vh; background: #043a1f; color: #fff; }
-.header { display: flex; justify-content: space-between; font-size: 22px; margin-bottom: 20px; }
+/* UI保持你之前绿色风格 */
+.game-view {
+  padding: 15px;
+  font-family: "Microsoft YaHei";
+  min-height: 100vh;
+  background: linear-gradient(#07351f, #02160d);
+  color: #fff;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 22px;
+  margin-bottom: 20px;
+}
 .balance { color: #ffd700; }
 .countdown.stop { color: red; }
 .result-box { text-align: center; font-size: 26px; margin-bottom: 20px; }
 .result-box span { color: #ffd700; font-size: 35px; }
-.board { display: flex; height: 230px; border: 5px solid #c99b27; border-radius: 25px; overflow: hidden; margin-bottom: 20px; }
-.area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
+.board {
+  display: flex;
+  height: 230px;
+  border: 5px solid #c99b27;
+  border-radius: 25px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
 .area.blue { background: #063b8f; }
 .area.green { background: #16834b; }
 .area.red { background: #9b1212; }
 .name { font-size: 55px; font-weight: bold; }
 .odds { font-size: 18px; }
-.chips { display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
-.chip { width: 65px; height: 65px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 5px dashed white; font-weight: bold; cursor: pointer; }
+.chips {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.chip {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 5px dashed white;
+  font-weight: bold;
+  cursor: pointer;
+}
 .chip.red { background: #d11; }
 .chip.blue { background: #1769aa; }
 .chip.green { background: #1b8d35; }
