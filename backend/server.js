@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -8,20 +9,20 @@ const adminRouter = require("./routes/admin");
 const game = require("./services/game");
 
 const app = express();
+
+// 允许跨域
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 // ----------------------
-// 连接 MongoDB Atlas
+// MongoDB 连接
 // ----------------------
-mongoose.connect(
-  "mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
-)
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log("MongoDB connection error:", err));
+  .catch(err => console.log("MongoDB Error:", err));
 
 // ----------------------
-// 首页检测
+// 首页测试
 // ----------------------
 app.get("/", (req, res) => {
   res.json({ status: "ok", message: "backend running" });
@@ -33,7 +34,11 @@ app.get("/", (req, res) => {
 app.get("/api/score/:id", async (req, res) => {
   let player = await Player.findOne({ playerId: req.params.id });
   if (!player) {
-    player = await Player.create({ playerId: req.params.id, name: "玩家", score: 10000 });
+    player = await Player.create({
+      playerId: req.params.id,
+      name: "玩家",
+      score: 10000,
+    });
   }
   res.json(player);
 });
@@ -44,7 +49,8 @@ app.get("/api/score/:id", async (req, res) => {
 app.post("/api/bet", async (req, res) => {
   try {
     const { playerId, area, amount } = req.body;
-    if (!playerId || !area || !amount) return res.json({ success: false, message: "下注数据错误" });
+    if (!playerId || !area || !amount)
+      return res.json({ success: false, message: "下注数据错误" });
 
     const player = await Player.findOne({ playerId });
     if (!player) return res.json({ success: false, message: "玩家不存在" });
@@ -54,7 +60,13 @@ app.post("/api/bet", async (req, res) => {
     player.score -= Number(amount);
     await player.save();
 
-    const bet = await Bet.create({ playerId, area, amount: Number(amount), result: "pending" });
+    const bet = await Bet.create({
+      playerId,
+      area,
+      amount: Number(amount),
+      result: "pending",
+    });
+
     res.json({ success: true, score: player.score, bet });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -77,7 +89,7 @@ app.get("/api/result", (req, res) => {
 });
 
 // ----------------------
-// 后台路由
+// 后台管理路由
 // ----------------------
 app.use("/admin", adminRouter);
 
