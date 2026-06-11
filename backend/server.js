@@ -1,15 +1,9 @@
-require("dotenv").config()
-
-const express=require("express")
-const mongoose=require("mongoose")
-const cors=require("cors")
+const express = require("express")
+const cors = require("cors")
+const path = require("path")
 
 
-const Player=require("./models/player")
-const Bet=require("./models/Bet")
-
-
-const app=express()
+const app = express()
 
 
 app.use(cors())
@@ -18,60 +12,68 @@ app.use(express.json())
 
 
 
-mongoose.connect(process.env.MONGODB_URI)
-
-.then(()=>console.log("MongoDB ok"))
-
-.catch(e=>console.log(e))
+// =================
+// 数据
+// =================
 
 
+let players = [
+
+{
+id:"player1",
+name:"player1",
+balance:10000
+}
 
 
-
-// 首页
-
-app.get("/",(req,res)=>{
-
-res.json({
-
-status:"running"
-
-})
-
-
-})
+]
 
 
 
+let bets=[]
 
-// 玩家余额
 
-app.get("/api/score/:id",async(req,res)=>{
+
+let game={
+
+result:"等待开奖",
+
+time:20
+
+}
+
+
+
+
+
+
+
+// =================
+// 玩家
+// =================
+
+
+app.get(
+"/api/player/:id",
+(req,res)=>{
 
 
 let p =
-await Player.findOne({
+players.find(
+x=>x.id===req.params.id
+)
 
-playerId:req.params.id
-
-})
 
 
 if(!p){
 
-p=
-await Player.create({
+return res.json({
 
-playerId:req.params.id,
-
-name:"玩家",
-
-score:10000
+balance:0
 
 })
 
 }
-
 
 
 res.json(p)
@@ -84,16 +86,46 @@ res.json(p)
 
 
 
-// 玩家列表
 
-app.get("/api/players",async(req,res)=>{
-
-
-const list =
-await Player.find()
+// 修改余额
 
 
-res.json(list)
+app.post(
+"/api/player/update",
+(req,res)=>{
+
+
+let {
+
+id,
+
+balance
+
+}=req.body
+
+
+
+let p =
+players.find(
+x=>x.id===id
+)
+
+
+
+if(p){
+
+p.balance =
+Number(balance)
+
+}
+
+
+
+res.json({
+
+success:true
+
+})
 
 
 })
@@ -103,41 +135,96 @@ res.json(list)
 
 
 
-// 玩家修改
+
+// =================
+// 投注记录
+// =================
+
+
+
+app.get(
+"/api/bets/:id",
+(req,res)=>{
+
+
+res.json(
+
+bets.filter(
+b=>b.player===req.params.id
+)
+
+)
+
+
+})
+
+
+
+
+
+
+
+//下注
+
 
 app.post(
-"/admin/player/update",
+"/api/bet",
+(req,res)=>{
 
-async(req,res)=>{
 
+let {
 
-const {
+player,
 
-playerId,
+type,
 
-name,
-
-score
+amount
 
 
 }=req.body
 
 
 
-await Player.updateOne(
+let p =
+players.find(
+x=>x.id===player
+)
 
-{playerId},
 
-{
 
-name,
+if(!p){
 
-score
+return res.json({
+
+error:"玩家不存在"
+
+})
 
 }
 
 
-)
+
+
+
+p.balance -= amount
+
+
+
+
+bets.push({
+
+id:Date.now(),
+
+player,
+
+type,
+
+amount,
+
+result:"等待开奖"
+
+
+})
 
 
 
@@ -156,113 +243,20 @@ success:true
 
 
 
-//下注
-
-
-app.post("/api/bet",
-
-async(req,res)=>{
-
-
-const {
-
-playerId,
-
-area,
-
-amount
-
-
-}=req.body
 
 
 
-const p =
-await Player.findOne({
+// =================
+// 游戏状态
+// =================
 
-playerId
-
-})
-
-
-
-if(p.score < amount)
-
-return res.json({
-
-success:false,
-
-message:"余额不足"
-
-})
-
-
-
-
-p.score-=amount
-
-
-await p.save()
-
-
-
-const bet =
-await Bet.create({
-
-playerId,
-
-area,
-
-amount,
-
-result:"pending",
-
-settled:false
-
-
-})
-
-
-
-res.json({
-
-success:true,
-
-score:p.score,
-
-bet
-
-
-})
-
-
-
-})
-
-
-
-
-
-
-
-//投注记录
 
 app.get(
-"/api/records",
-
-async(req,res)=>{
-
-
-const b =
-await Bet.find()
-.sort({
-
-createdAt:-1
-
-})
+"/api/game",
+(req,res)=>{
 
 
-res.json(b)
+res.json(game)
 
 
 })
@@ -272,113 +266,81 @@ res.json(b)
 
 
 
+// 开奖
 
 
-//开奖
+app.post(
+"/api/open",
+(req,res)=>{
 
 
-let current="等待开奖"
-
-
-
-
-
-app.post("/admin/open",
-
-async(req,res)=>{
-
-
-const result=req.body.result
+let result =
+req.body.result
 
 
 
-current=result
+game.result=result
+
+game.time=0
 
 
 
 
-const bets =
-await Bet.find({
-
-settled:false
-
-})
+bets.forEach(b=>{
 
 
-
-for(let b of bets){
-
+if(b.type===result){
 
 
-let win =
-b.area===result
-
-
-
-b.result =
-win?"win":"lose"
-
-
-b.settled=true
-
-
-
-await b.save()
-
-
-
-if(win){
+b.result="赢"
 
 
 let p =
-await Player.findOne({
-
-playerId:b.playerId
-
-})
-
-
-
-let rate=1
-
-
-
-if(result==="和")
-
-rate=8
-
-
-if(result==="庄")
-
-rate=0.95
-
-
-
-
-p.score +=
-Math.floor(
-b.amount*rate
+players.find(
+x=>x.id===b.player
 )
 
 
 
-await p.save()
+let rate={
+
+"闲":1,
+
+"和":8,
+
+"庄":0.95
+
+}
+
+
+
+p.balance +=
+
+b.amount *
+rate[result]
+
+
+}
+
+
+else{
+
+
+b.result="输"
 
 
 }
 
 
 
+})
 
-}
 
 
 
 res.json({
 
-success:true,
-
-result
+success:true
 
 
 })
@@ -386,6 +348,7 @@ result
 
 
 })
+
 
 
 
@@ -397,12 +360,17 @@ result
 // 下一轮
 
 
-app.post("/admin/next",
-
+app.post(
+"/api/next",
 (req,res)=>{
 
 
-current="等待开奖"
+game.result="等待开奖"
+
+game.time=20
+
+
+bets=[]
 
 
 res.json({
@@ -412,6 +380,7 @@ success:true
 })
 
 
+
 })
 
 
@@ -419,21 +388,46 @@ success:true
 
 
 
-app.get("/api/result",
 
+// =================
+// 静态文件
+// =================
+
+
+app.use(
+express.static(
+path.join(
+__dirname,
+"frontend/dist"
+)
+
+)
+)
+
+
+
+
+
+app.get(
+"*",
 (req,res)=>{
 
 
-res.json({
+res.sendFile(
 
-result:current
+path.join(
+
+__dirname,
+
+"frontend/dist/index.html"
+
+)
+
+
+)
+
 
 })
-
-
-})
-
-
 
 
 
@@ -441,16 +435,19 @@ result:current
 
 
 const PORT =
-process.env.PORT||3000
+process.env.PORT || 3000
 
 
 
-app.listen(PORT,()=>{
-
+app.listen(
+PORT,
+()=>{
 
 console.log(
 "server running",
 PORT
 )
 
-})
+}
+
+)
