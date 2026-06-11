@@ -16,7 +16,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 // =====================
 // MongoDB 连接
 // =====================
-mongoose.connect("mongodb://localhost:27017/demo-game", {
+mongoose.connect("mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0", {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
