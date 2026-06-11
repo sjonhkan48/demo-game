@@ -2,13 +2,15 @@
   <div class="game-container">
     <!-- 余额和倒计时 -->
     <div class="balance-timer">
-      <span>💰 当前余额：{{ player.balance }}</span>
-      <span>下注倒计时 {{ countdown }} 秒</span>
+      <span class="balance">💰 当前余额：{{ player.balance }}</span>
+      <span class="countdown" :class="{ 'time-up': countdown === 0 }">
+        下注倒计时 {{ countdown }} 秒
+      </span>
     </div>
 
     <!-- 游戏结果显示 -->
     <div class="result-display">
-      开奖结果：{{ game.result }}
+      开奖结果：<span :class="game.resultClass">{{ game.result }}</span>
     </div>
 
     <!-- 投注区域 -->
@@ -41,7 +43,9 @@
     <!-- 当前下注显示 -->
     <div class="current-bet">
       当前筹码: {{ selectedChip || customBet }} 当前下注: {{ currentOption || '未选择' }}
-      <button @click="placeBet" :disabled="!canBet">确认下注</button>
+      <button @click="placeBet" :disabled="!canBet || !currentOption">
+        {{ canBet ? '确认下注' : '停止下注' }}
+      </button>
     </div>
 
     <!-- 投注记录表格 -->
@@ -59,7 +63,7 @@
           <td>{{ record.playerId }}</td>
           <td>{{ record.option }}</td>
           <td>{{ record.amount }}</td>
-          <td>{{ record.result }}</td>
+          <td :class="record.resultClass">{{ record.result }}</td>
         </tr>
       </tbody>
     </table>
@@ -73,7 +77,7 @@ import { io } from 'socket.io-client'
 
 // 玩家和游戏状态
 const player = reactive({ id: 'player1', balance: 10000 })
-const game = reactive({ result: '等待开奖' })
+const game = reactive({ result: '等待开奖', resultClass: 'waiting' })
 const countdown = ref(20)
 const canBet = ref(true)
 
@@ -97,38 +101,48 @@ function selectChip(chip) {
 
 // 选择区域
 function choose(option) {
+  if (!canBet.value) return
   currentOption.value = option
 }
 
 // 获取玩家和游戏信息
 async function load() {
-  const p = await axios.get('/api/player/player1')
-  Object.assign(player, p.data)
-  const g = await axios.get('/api/game')
-  game.result = g.data.result
-  countdown.value = g.data.time
+  try {
+    const p = await axios.get('/api/player/player1')
+    Object.assign(player, p.data)
+    const g = await axios.get('/api/game')
+    game.result = g.data.result
+    countdown.value = g.data.time
+  } catch (err) {
+    console.error(err)
+  }
 }
 
 // 投注逻辑
 async function placeBet() {
-  const amount = customBet.value || selectedChip.value
   if (!currentOption.value) return alert('请选择投注区域')
+  const amount = customBet.value || selectedChip.value
   if (amount > player.balance) return alert('余额不足')
 
-  const r = await axios.post('/api/bets', {
-    playerId: player.id,
-    option: currentOption.value,
-    amount
-  })
-  if (r.data.success) {
-    player.balance -= amount
-    records.value.push({
-      id: Date.now(),
+  try {
+    const r = await axios.post('/api/bets', {
       playerId: player.id,
       option: currentOption.value,
-      amount,
-      result: '等待开奖'
+      amount
     })
+    if (r.data.success) {
+      player.balance -= amount
+      records.value.push({
+        id: Date.now(),
+        playerId: player.id,
+        option: currentOption.value,
+        amount,
+        result: '等待开奖',
+        resultClass: 'waiting'
+      })
+    }
+  } catch (err) {
+    console.error(err)
   }
 }
 
@@ -146,8 +160,19 @@ function initSocket() {
   socket.on('connect', () => console.log('Socket connected'))
   socket.on('update', data => {
     if (data.player) Object.assign(player, data.player)
-    if (data.game) Object.assign(game, data.game)
-    if (data.bets) records.value = data.bets
+    if (data.game) {
+      Object.assign(game, data.game)
+      // 设置结果状态类
+      if (game.result === '等待开奖') game.resultClass = 'waiting'
+      else if (game.result === '闲' || game.result === '庄') game.resultClass = 'win'
+      else game.resultClass = 'lose'
+    }
+    if (data.bets) {
+      records.value = data.bets.map(r => ({
+        ...r,
+        resultClass: r.result === '等待开奖' ? 'waiting' : r.result === '输' ? 'lose' : 'win'
+      }))
+    }
   })
 }
 
@@ -163,17 +188,31 @@ onMounted(() => {
   padding: 20px;
   background-color: #0f2d17;
   color: #fff;
+  font-family: Arial, sans-serif;
 }
 .balance-timer {
   display: flex;
   justify-content: space-between;
   margin-bottom: 10px;
 }
+.balance {
+  color: #FFD700; /* 金黄色 */
+}
+.countdown {
+  color: #ff0000; /* 红色 */
+}
+.countdown.time-up {
+  color: gray;
+}
 .result-display {
-  font-size: 20px;
+  font-size: 22px;
   margin-bottom: 10px;
   text-align: center;
 }
+.result-display .waiting { color: yellow; }
+.result-display .win { color: green; }
+.result-display .lose { color: red; }
+
 .bet-board {
   display: flex;
   justify-content: space-around;
@@ -188,6 +227,12 @@ onMounted(() => {
   font-weight: bold;
   padding: 20px;
   cursor: pointer;
+  color: #fff;
+  border-radius: 8px;
+  margin: 0 5px;
+}
+.bet-option:hover {
+  opacity: 0.8;
 }
 .chips {
   margin: 10px 0;
@@ -199,6 +244,8 @@ onMounted(() => {
   border-radius: 50%;
   font-weight: bold;
   cursor: pointer;
+  color: #fff;
+  border: none;
 }
 .chip10 { background:red; }
 .chip50 { background:blue; }
@@ -207,6 +254,12 @@ onMounted(() => {
 .chip1000 { background:black; color:white; }
 .current-bet {
   margin: 10px 0;
+}
+.current-bet button {
+  margin-left: 10px;
+  padding: 5px 10px;
+  font-weight: bold;
+  cursor: pointer;
 }
 .bet-records {
   width: 100%;
@@ -217,4 +270,7 @@ onMounted(() => {
   padding: 5px;
   text-align: center;
 }
+.bet-records td.waiting { color: yellow; }
+.bet-records td.win { color: green; }
+.bet-records td.lose { color: red; }
 </style>
