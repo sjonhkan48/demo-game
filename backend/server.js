@@ -16,11 +16,15 @@ const io = new Server(server, { cors: { origin: "*" } });
 // =====================
 // MongoDB 连接
 // =====================
-mongoose.connect("mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0", {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+mongoose.connect(
+  "mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/demo-game?retryWrites=true&w=majority"
+)
+.then(()=>{
+    console.log("MongoDB connected");
+})
+.catch(err=>{
+    console.log("MongoDB connection error:",err);
 });
-
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "MongoDB connection error:"));
 db.once("open", () => console.log("MongoDB connected"));
