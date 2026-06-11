@@ -1,33 +1,39 @@
 <template>
 
-<div class="admin">
+<div>
+
 
 <h1>后台管理系统</h1>
 
 
-<div class="panel">
+<div class="box">
+
 
 <h2>游戏控制</h2>
 
+
 <p>
 当前状态：
-{{ gameStatus }}
+{{game.status}}
 </p>
 
 
 <p>
 开奖结果：
-<b>{{ result }}</b>
+{{game.result}}
 </p>
 
 
-<select v-model="selectResult">
+<select v-model="result">
 
-<option value="闲">闲</option>
-<option value="和">和</option>
-<option value="庄">庄</option>
+<option>闲</option>
+
+<option>和</option>
+
+<option>庄</option>
 
 </select>
+
 
 
 <button @click="openGame">
@@ -35,71 +41,77 @@
 </button>
 
 
-<button @click="nextRound">
+<button @click="next">
 下一轮
 </button>
 
 
+
 </div>
 
 
 
-<div class="panel">
 
-<button @click="createInvite">
-生成玩家邀请链接
+
+<div class="box">
+
+<button @click="refresh">
+
+刷新玩家
+
 </button>
 
 
-<p>
-{{ invite }}
-</p>
-
-
 </div>
 
 
 
-<h2>玩家管理</h2>
+
+
+<h2>
+玩家管理
+</h2>
+
 
 
 <table>
 
+
 <tr>
 
 <th>ID</th>
-<th>名称</th>
-<th>余额</th>
-<th>操作</th>
 
+<th>名称</th>
+
+<th>余额</th>
+
+<th>操作</th>
 
 </tr>
 
 
-<tr v-for="p in players" :key="p.playerId">
 
-
-<td>
-{{p.playerId}}
-</td>
-
-
-<td>
-
-<input v-model="p.name">
-
-</td>
-
-
-
-<td>
-
-<input 
-type="number"
-v-model.number="p.score"
+<tr
+v-for="p in players"
+:key="p.playerId"
 >
 
 
+<td>
+
+{{p.playerId}}
+
+</td>
+
+
+<td>
+
+
+<input
+v-model="p.name"
+/>
+
+
 </td>
 
 
@@ -107,10 +119,26 @@ v-model.number="p.score"
 <td>
 
 
-<button @click="savePlayer(p)">
-保存
-</button>
+<input
+type="number"
+v-model.number="p.score"
+/>
 
+
+</td>
+
+
+
+<td>
+
+
+<button
+@click="save(p)"
+>
+
+保存
+
+</button>
 
 
 <a
@@ -126,74 +154,7 @@ target="_blank"
 </td>
 
 
-
 </tr>
-
-
-</table>
-
-
-
-
-
-<h2>开奖记录</h2>
-
-
-<table>
-
-<tr>
-
-<th>
-玩家
-</th>
-
-<th>
-下注
-</th>
-
-<th>
-金额
-</th>
-
-<th>
-结果
-</th>
-
-
-</tr>
-
-
-
-<tr
-v-for="b in records"
-:key="b._id"
->
-
-
-<td>
-{{b.playerId}}
-</td>
-
-
-<td>
-{{b.area}}
-</td>
-
-
-<td>
-{{b.amount}}
-</td>
-
-
-<td>
-
-{{b.result}}
-
-</td>
-
-
-</tr>
-
 
 
 </table>
@@ -202,66 +163,75 @@ v-for="b in records"
 
 </div>
 
+
 </template>
+
+
 
 
 
 <script setup>
 
 
-import {ref,onMounted} from "vue";
-
-import axios from "axios";
-
-
-const API="你的后台地址";
-
-
-const players=ref([]);
-
-
-const records=ref([]);
-
-
-const selectResult=ref("庄");
-
-
-const result=ref("");
-
-const gameStatus=ref("等待开奖");
-
-
-const invite=ref("");
+import {
+ref,
+onMounted
+}
+from "vue";
 
 
 
-async function load(){
+const API =
+"https://demo-game-2.onrender.com";
 
 
-let p=await axios.get(
-`${API}/admin/players`
+
+const players =
+ref([]);
+
+
+
+const game =
+ref({
+
+status:"",
+
+result:""
+
+});
+
+
+
+const result =
+ref("庄");
+
+
+
+
+
+async function refresh(){
+
+
+let p =
+await fetch(
+API+"/admin/players"
 );
 
 
-players.value=p.data;
+players.value =
+await p.json();
 
 
 
-let r=await axios.get(
-`${API}/admin/records`
+
+let g =
+await fetch(
+API+"/api/game"
 );
 
 
-records.value=r.data;
-
-
-
-let g=await axios.get(
-`${API}/api/result`
-);
-
-
-result.value=g.data.result;
+game.value =
+await g.json();
 
 
 
@@ -271,25 +241,44 @@ result.value=g.data.result;
 
 
 
-async function savePlayer(p){
+
+async function save(p){
 
 
-await axios.post(
-`${API}/admin/player/update`,
+
+await fetch(
+
+API+"/admin/player/update",
+
 {
+
+method:"POST",
+
+headers:{
+
+"Content-Type":"application/json"
+
+},
+
+
+body:JSON.stringify({
 
 playerId:p.playerId,
 
-name:p.name,
-
 score:p.score
 
+})
+
+
 }
+
+
 
 );
 
 
 alert("保存成功");
+
 
 
 }
@@ -301,21 +290,35 @@ async function openGame(){
 
 
 
-await axios.post(
-`${API}/admin/open`,
+await fetch(
+
+API+"/admin/open",
+
 {
 
-result:selectResult.value
+
+method:"POST",
+
+headers:{
+
+"Content-Type":"application/json"
+
+},
+
+
+body:JSON.stringify({
+
+result:result.value
+
+})
 
 }
+
 
 );
 
 
-gameStatus.value="开奖完成";
-
-
-load();
+refresh();
 
 
 }
@@ -324,23 +327,28 @@ load();
 
 
 
-async function nextRound(){
+
+
+async function next(){
 
 
 
-await axios.post(
-`${API}/admin/next`
+await fetch(
+
+API+"/admin/next",
+
+{
+
+method:"POST"
+
+}
+
+
 );
 
 
-gameStatus.value="下注中";
 
-
-result.value="等待开奖";
-
-
-load();
-
+refresh();
 
 
 }
@@ -348,33 +356,21 @@ load();
 
 
 
-
-async function createInvite(){
-
-
-
-let res=await axios.get(
-`${API}/admin/invite`
-);
-
-
-invite.value=res.data.url;
-
-
-}
 
 
 
 onMounted(()=>{
 
 
-load();
+refresh();
 
 
-setInterval(load,3000);
+
+setInterval(refresh,2000);
 
 
-})
+
+});
 
 
 
@@ -382,37 +378,19 @@ setInterval(load,3000);
 
 
 
+
+
 <style scoped>
 
 
-.admin{
-
-padding:20px;
-
-font-family:"Microsoft YaHei";
-
-}
-
-
-
-.panel{
-
+.box{
 
 background:#eee;
 
-padding:20px;
+padding:30px;
 
 margin-bottom:20px;
 
-
-}
-
-
-button{
-
-margin:5px;
-
-padding:8px 15px;
 
 }
 
@@ -423,13 +401,14 @@ width:100%;
 
 border-collapse:collapse;
 
+
 }
 
 
 
 td,th{
 
-border:1px solid #aaa;
+border:1px solid #ccc;
 
 padding:10px;
 
@@ -437,6 +416,15 @@ text-align:center;
 
 }
 
+
+
+button{
+
+margin:5px;
+
+padding:8px 15px;
+
+}
 
 
 </style>
