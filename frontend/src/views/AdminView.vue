@@ -1,201 +1,277 @@
 <template>
-<div class="admin">
+  <div class="admin">
 
-<h1>后台管理系统</h1>
+    <h1>后台管理系统</h1>
 
 
-<div class="box">
+    <!-- 游戏控制 -->
+    <div class="box">
 
-<h2>游戏控制</h2>
+      <h2>游戏控制</h2>
 
-<p>
-当前状态：
-{{ gameStatus }}
-</p>
+      <p>
+        当前状态：
+        {{ game.result }}
+      </p>
 
 
-<p>
-开奖结果：
-{{ result }}
-</p>
+      <p>
+        开奖结果：
+        {{ game.result }}
+      </p>
 
 
-<select v-model="openResult">
+      <select v-model="result">
 
-<option value="闲">闲</option>
-<option value="和">和</option>
-<option value="庄">庄</option>
+        <option value="闲">
+          闲
+        </option>
 
-</select>
+        <option value="和">
+          和
+        </option>
 
+        <option value="庄">
+          庄
+        </option>
 
-<button @click="openGame">
-立即开奖
-</button>
+      </select>
 
 
-<button @click="nextRound">
-下一轮
-</button>
+      <button @click="openGame">
+        立即开奖
+      </button>
 
 
-</div>
+      <button @click="nextRound">
+        下一轮
+      </button>
 
 
+    </div>
 
-<div class="box">
 
-<button @click="loadPlayers">
-刷新玩家
-</button>
 
+    <!-- 创建玩家 -->
+    <div class="box">
 
-</div>
+      <button @click="createPlayer">
+        添加玩家
+      </button>
 
 
+    </div>
 
-<h2>玩家管理</h2>
 
 
-<table>
 
-<thead>
+    <!-- 玩家管理 -->
 
-<tr>
+    <h2>
+      玩家管理
+    </h2>
 
-<th>ID</th>
-<th>名称</th>
-<th>余额</th>
-<th>操作</th>
 
+    <table>
 
-</tr>
 
+      <thead>
 
-</thead>
+      <tr>
 
+        <th>
+          ID
+        </th>
 
-<tbody>
+        <th>
+          名称
+        </th>
 
+        <th>
+          余额
+        </th>
 
-<tr v-for="p in players" :key="p.playerId">
+        <th>
+          操作
+        </th>
 
 
-<td>
-{{p.playerId}}
-</td>
+      </tr>
 
+      </thead>
 
-<td>
 
-<input v-model="p.name">
+      <tbody>
 
-</td>
 
+      <tr
+      v-for="p in players"
+      :key="p.playerId"
+      >
 
-<td>
 
-<input 
-type="number"
-v-model.number="p.score"
->
+        <td>
 
-</td>
+          {{p.playerId}}
 
+        </td>
 
-<td>
 
-<button @click="savePlayer(p)">
-保存
-</button>
 
+        <td>
 
-<a 
-:href="playerLink(p.playerId)"
-target="_blank"
->
-玩家链接
-</a>
+          <input
+          v-model="p.name"
+          >
 
+        </td>
 
-</td>
 
 
-</tr>
+        <td>
 
 
-</tbody>
+          <input
+          type="number"
+          v-model.number="p.balance"
+          >
 
-</table>
 
+        </td>
 
 
 
+        <td>
 
-<h2>开奖记录</h2>
 
+          <button
+          @click="updatePlayer(p)"
+          >
 
-<table>
+          保存
 
+          </button>
 
-<thead>
 
-<tr>
 
-<th>玩家</th>
-<th>下注</th>
-<th>金额</th>
-<th>结果</th>
+          <button
+          @click="copyLink(p)"
+          >
 
+          玩家链接
 
-</tr>
+          </button>
 
-</thead>
 
 
-<tbody>
+        </td>
 
 
-<tr v-for="b in records" :key="b._id">
 
+      </tr>
 
-<td>
-{{b.playerId}}
-</td>
 
 
-<td>
-{{b.area}}
-</td>
+      </tbody>
 
 
-<td>
-{{b.amount}}
-</td>
+    </table>
 
 
-<td>
 
-{{showResult(b.result)}}
 
-</td>
+    <!-- 投注记录 -->
 
 
-</tr>
+    <h2>
 
+      开奖记录
 
+    </h2>
 
-</tbody>
 
 
+    <table>
 
-</table>
 
+      <thead>
 
+      <tr>
 
-</div>
+        <th>
+          玩家
+        </th>
 
 
+        <th>
+          区域
+        </th>
+
+
+        <th>
+          金额
+        </th>
+
+
+        <th>
+          结果
+        </th>
+
+
+      </tr>
+
+
+      </thead>
+
+
+
+      <tbody>
+
+
+      <tr
+      v-for="b in records"
+      :key="b._id"
+      >
+
+        <td>
+
+          {{b.playerId}}
+
+        </td>
+
+
+        <td>
+
+          {{b.area}}
+
+        </td>
+
+
+        <td>
+
+          {{b.amount}}
+
+        </td>
+
+
+        <td>
+
+          {{b.result}}
+
+        </td>
+
+
+      </tr>
+
+
+      </tbody>
+
+
+    </table>
+
+
+
+  </div>
 </template>
 
 
@@ -203,61 +279,85 @@ target="_blank"
 <script setup>
 
 
-import {ref,onMounted} from "vue"
+import {
+ref,
+onMounted
+}
+from "vue"
+
+
+
+import axios from "axios"
+
+
+
+import {
+io
+}
+from "socket.io-client"
+
+
 
 
 
 const API =
+import.meta.env.VITE_BACKEND_URL
+||
 "https://demo-game-3.onrender.com"
 
 
 
-const players=ref([])
 
-const records=ref([])
-
-
-const result=ref("")
-
-const gameStatus=ref("等待开奖")
-
-
-const openResult=ref("庄")
+const socket =
+io(API)
 
 
 
 
 
-async function request(url,options={}){
+const players =
+ref([])
 
 
-const res =
-await fetch(API+url,{
 
-headers:{
-"Content-Type":"application/json"
-},
 
-...options
+const records =
+ref([])
+
+
+
+
+const game =
+ref({
+
+result:"等待开奖"
 
 })
 
 
-return await res.json()
 
-
-}
-
-
+const result =
+ref("庄")
 
 
 
+
+
+
+// 获取玩家
 
 async function loadPlayers(){
 
 
+const res =
+await axios.get(
+API+"/api/players"
+)
+
+
 players.value =
-await request("/api/players")
+res.data
+
 
 
 }
@@ -265,13 +365,45 @@ await request("/api/players")
 
 
 
+
+// 获取记录
 
 
 async function loadRecords(){
 
 
+const res =
+await axios.get(
+API+"/api/records"
+)
+
+
 records.value =
-await request("/api/records")
+res.data
+
+
+
+}
+
+
+
+
+
+// 获取游戏
+
+
+async function loadGame(){
+
+
+const res =
+await axios.get(
+API+"/api/game"
+)
+
+
+game.value =
+res.data
+
 
 
 }
@@ -281,69 +413,40 @@ await request("/api/records")
 
 
 
-async function openGame(){
+
+
+// 添加玩家
+
+
+async function createPlayer(){
+
+
+const id =
+"player"+Date.now()
 
 
 
-const data =
-await request(
-"/admin/open",
+await axios.post(
+
+API+"/admin/player",
+
 {
 
-method:"POST",
+playerId:id,
 
-body:JSON.stringify({
+name:"新玩家",
 
-result:openResult.value
-
-})
-
-
-})
-
-
-
-if(data.success){
-
-result.value=data.result
-
-gameStatus.value="开奖完成"
+balance:10000
 
 }
 
-
-
-}
-
-
-
-
-
-
-async function nextRound(){
-
-
-
-const data =
-await request(
-"/admin/next",
-{
-
-method:"POST"
-
-}
 
 )
 
 
 
-if(data.success){
+loadPlayers()
 
-gameStatus.value="等待开奖"
-
-result.value="等待开奖"
-
-}
 
 
 }
@@ -353,27 +456,31 @@ result.value="等待开奖"
 
 
 
-async function savePlayer(p){
+
+// 修改玩家余额
 
 
-await request(
-"/admin/player/update",
+async function updatePlayer(p){
+
+
+await axios.post(
+
+API+"/admin/update-player",
+
 {
 
-method:"POST",
-
-body:JSON.stringify({
 
 playerId:p.playerId,
 
-name:p.name,
 
-score:p.score
+balance:p.balance,
 
 
-})
+name:p.name
+
 
 }
+
 
 )
 
@@ -382,6 +489,42 @@ score:p.score
 alert("保存成功")
 
 
+
+}
+
+
+
+
+
+
+
+// 开奖
+
+
+async function openGame(){
+
+
+
+await axios.post(
+
+API+"/admin/open",
+
+{
+
+
+result:result.value
+
+
+}
+
+)
+
+
+
+loadGame()
+
+
+
 }
 
 
@@ -390,11 +533,58 @@ alert("保存成功")
 
 
 
-function playerLink(id){
+// 下一轮
 
 
-return window.location.origin+
-"/?player="+id
+async function nextRound(){
+
+
+
+await axios.post(
+
+API+"/admin/next"
+
+)
+
+
+
+loadGame()
+
+
+
+}
+
+
+
+
+
+
+
+// 玩家链接
+
+
+function copyLink(p){
+
+
+
+const url =
+
+window.location.origin
++
+"/?player="
++
+p.playerId
+
+
+
+navigator.clipboard.writeText(url)
+
+
+
+alert(
+"玩家链接复制成功"
+)
+
 
 
 }
@@ -402,18 +592,62 @@ return window.location.origin+
 
 
 
-function showResult(r){
 
 
-if(r==="win") return "赢"
 
-if(r==="lose") return "输"
+// socket 实时同步
 
 
-return "等待开奖"
+socket.on(
+"updatePlayer",
+
+()=>{
+
+
+loadPlayers()
 
 
 }
+)
+
+
+
+
+
+socket.on(
+
+"newBet",
+
+()=>{
+
+
+loadRecords()
+
+
+}
+
+)
+
+
+
+
+
+socket.on(
+
+"gameResult",
+
+()=>{
+
+
+loadGame()
+
+
+}
+
+)
+
+
+
 
 
 
@@ -424,18 +658,11 @@ onMounted(()=>{
 
 loadPlayers()
 
-loadRecords()
-
-
-setInterval(()=>{
-
-
-loadPlayers()
 
 loadRecords()
 
 
-},3000)
+loadGame()
 
 
 
@@ -443,7 +670,11 @@ loadRecords()
 
 
 
+
+
 </script>
+
+
 
 
 
@@ -452,58 +683,77 @@ loadRecords()
 
 .admin{
 
+
 padding:20px;
 
-font-family:"Microsoft YaHei";
+font-family:Arial;
 
 }
+
 
 
 .box{
 
+
 background:#eee;
 
-padding:25px;
+padding:20px;
 
 margin-bottom:20px;
 
-}
-
-
-table{
-
-width:100%;
-
-border-collapse:collapse;
 
 }
 
-
-td,th{
-
-border:1px solid #aaa;
-
-padding:10px;
-
-text-align:center;
-
-}
 
 
 button{
+
 
 padding:8px 15px;
 
 margin:5px;
 
+
 }
+
+
+
+table{
+
+
+width:100%;
+
+border-collapse:collapse;
+
+
+}
+
+
+
+th,td{
+
+
+border:1px solid #ccc;
+
+padding:10px;
+
+text-align:center;
+
+
+}
+
 
 
 input{
 
+
 width:160px;
 
+height:25px;
+
+
 }
+
 
 
 </style>
