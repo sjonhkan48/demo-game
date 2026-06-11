@@ -1,432 +1,118 @@
 <template>
-
-
-<div class="admin">
-
-
-<h1>
-玩家管理后台
-</h1>
-
-
-
-<div
-class="player"
-v-for="p in players"
-:key="p.id"
->
-
-
-
-<h3>
-玩家
-</h3>
-
-
-<p>
-ID:
-{{p.id}}
-</p>
-
-
-
-<input
-v-model="p.name"
-placeholder="玩家名称"
-/>
-
-
-
-<input
-v-model="p.balance"
-type="number"
-/>
-
-
-
-<button
-@click="save(p)"
->
-保存
-</button>
-
-
-
-<p>
-
-玩家链接:
-
-<br>
-
-{{baseUrl}}/room/{{p.id}}
-
-</p>
-
-
-
-<p>
-
-当前状态:
-
-{{p.status}}
-
-</p>
-
-
-
-<hr>
-
-
-
-<h4>
-开奖设置
-</h4>
-
-
-<button
-@click="open('闲')"
->
-闲
-</button>
-
-
-
-<button
-@click="open('和')"
->
-和
-</button>
-
-
-
-<button
-@click="open('庄')"
->
-庄
-</button>
-
-
-
-<button
-@click="next"
->
-开始下一轮
-</button>
-
-
-
-</div>
-
-
-
-
-
-<hr>
-
-
-
-
-<h2>
-开奖记录
-</h2>
-
-
-
-<select
-v-model="filter"
->
-
-<option value="">
-全部玩家
-</option>
-
-
-<option
-v-for="p in players"
-:value="p.id"
->
-
-{{p.name}}
-
-</option>
-
-
-</select>
-
-
-
-
-<table>
-
-
-<tr>
-
-<th>
-玩家
-</th>
-
-<th>
-下注
-</th>
-
-<th>
-金额
-</th>
-
-<th>
-结果
-</th>
-
-
-</tr>
-
-
-
-<tr
-v-for="r in records"
-:key="r._id"
->
-
-
-<td>
-{{r.playerName}}
-</td>
-
-
-<td>
-{{r.option}}
-</td>
-
-
-<td>
-{{r.amount}}
-</td>
-
-
-<td>
-{{r.result}}
-</td>
-
-
-
-</tr>
-
-
-</table>
-
-
-
-</div>
-
-
+  <div class="admin-container">
+    <h2>玩家管理</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>名称</th>
+          <th>余额</th>
+          <th>操作</th>
+          <th>当前状态</th>
+          <th>开奖设置</th>
+          <th>下一轮</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="player in players" :key="player.id">
+          <td>{{ player.id }}</td>
+          <td><input v-model="player.name" /></td>
+          <td><input type="number" v-model.number="player.balance" /></td>
+          <td><button @click="savePlayer(player)">保存</button></td>
+          <td>{{ player.status }}</td>
+          <td>
+            <button @click="openResult(player, '闲')">闲</button>
+            <button @click="openResult(player, '和')">和</button>
+            <button @click="openResult(player, '庄')">庄</button>
+          </td>
+          <td><button @click="nextRound(player)">开始下一轮</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>开奖记录</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>玩家ID</th>
+          <th>选项</th>
+          <th>金额</th>
+          <th>结果</th>
+          <th>时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="record in records" :key="record._id">
+          <td>{{ record.playerId }}</td>
+          <td>{{ record.option }}</td>
+          <td>{{ record.amount }}</td>
+          <td>{{ record.result }}</td>
+          <td>{{ new Date(record.createdAt).toLocaleString() }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </template>
 
-
-
-
-
-<script setup>
-
-
-import {
-ref,
-computed,
-onMounted
-}
-from "vue";
-
-
+<script>
 import axios from "axios";
 
-
-
-const API=
-"https://demo-game-3.onrender.com";
-
-
-
-const baseUrl=
-"https://你的前端地址";
-
-
-
-
-const players=
-ref([]);
-
-
-
-const records=
-ref([]);
-
-
-
-const filter=
-ref("");
-
-
-
-
-async function load(){
-
-
-players.value=
-await axios.get(
-API+"/api/players"
-)
-.then(r=>r.data);
-
-
-
-records.value=
-await axios.get(
-API+"/api/records"
-)
-.then(r=>r.data);
-
-
-}
-
-
-
-
-
-function save(p){
-
-
-axios.post(
-API+"/admin/update-player",
-{
-
-
-id:p.id,
-
-name:p.name,
-
-balance:p.balance
-
-
-}
-
-)
-.then(()=>{
-
-alert("保存成功")
-
-})
-
-
-}
-
-
-
-
-
-
-function open(result){
-
-
-axios.post(
-API+"/admin/open",
-{
-
-result
-
-}
-
-)
-
-
-}
-
-
-
-
-function next(){
-
-
-axios.post(
-API+"/admin/next"
-)
-
-}
-
-
-
-
-onMounted(()=>{
-
-
-load();
-
-
-});
-
-
+export default {
+  name: "AdminView",
+  data() {
+    return {
+      players: [],
+      records: [],
+      apiBase: "https://demo-game-3.onrender.com", // 修改为你后端地址
+    };
+  },
+  methods: {
+    async fetchPlayers() {
+      const res = await axios.get(`${this.apiBase}/api/players`);
+      this.players = res.data;
+    },
+    async fetchRecords() {
+      const res = await axios.get(`${this.apiBase}/api/records`);
+      this.records = res.data;
+    },
+    async savePlayer(player) {
+      await axios.post(`${this.apiBase}/admin/update-player`, player);
+      this.fetchPlayers();
+    },
+    async openResult(player, result) {
+      await axios.post(`${this.apiBase}/admin/open`, { result });
+      this.fetchPlayers();
+      this.fetchRecords();
+    },
+    async nextRound(player) {
+      await axios.post(`${this.apiBase}/admin/next`);
+      this.fetchPlayers();
+      this.fetchRecords();
+    },
+  },
+  mounted() {
+    this.fetchPlayers();
+    this.fetchRecords();
+  },
+};
 </script>
 
-
-
-
-
-<style scoped>
-
-
-.admin{
-
-padding:30px;
-
+<style>
+.admin-container {
+  padding: 20px;
 }
-
-
-
-.player{
-
-border:1px solid #ddd;
-
-padding:20px;
-
-margin-bottom:20px;
-
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
 }
-
-
-input{
-
-margin:5px;
-
-padding:8px;
-
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
 }
-
-
-button{
-
-margin:5px;
-
-padding:8px 15px;
-
+button {
+  margin: 2px;
+  padding: 4px 8px;
 }
-
-
-
-table{
-
-width:100%;
-
-border-collapse:collapse;
-
-}
-
-
-td,th{
-
-border:1px solid #ccc;
-
-padding:10px;
-
-}
-
-
-
 </style>
