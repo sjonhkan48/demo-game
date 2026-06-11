@@ -1,99 +1,327 @@
-const express = require('express')
-const http = require('http')
-const { Server } = require('socket.io')
-const cors = require('cors')
+const express = require("express");
+const cors = require("cors");
+const { Server } = require("socket.io");
+const http = require("http");
 
-const app = express()
-const server = http.createServer(app)
-const io = new Server(server, {
-  cors: { origin: '*' }
-})
 
-app.use(cors())
-app.use(express.json())
+const app = express();
 
-// ==== 模拟数据 ====
-let players = [
-  { id: 'player1', name: 'player1', balance: 10000 },
-  { id: 'player2', name: 'player2', balance: 5000 }
-]
+app.use(cors({
+    origin:"*"
+}));
 
-let game = { result: '等待开奖', countdown: 20, status: '下注中' }
-let betRecords = []
+app.use(express.json());
 
-// ==== API ====
-app.get('/api/player/:id', (req, res) => {
-  const player = players.find(p => p.id === req.params.id)
-  if (player) return res.json(player)
-  return res.status(404).json({ error: 'Player not found' })
-})
 
-app.get('/api/game', (req, res) => res.json(game))
+const server = http.createServer(app);
 
-app.get('/api/bets', (req, res) => res.json(betRecords))
 
-app.post('/api/bets', (req, res) => {
-  const { playerId, option, amount } = req.body
-  const player = players.find(p => p.id === playerId)
-  if (!player) return res.status(404).json({ success: false, message: 'Player not found' })
-  if (amount > player.balance) return res.status(400).json({ success: false, message: '余额不足' })
-
-  player.balance -= amount
-  const record = { id: Date.now().toString(), playerId, option, amount, result: null }
-  betRecords.push(record)
-
-  io.emit('update', { players, game, betRecords })
-  return res.json({ success: true })
-})
-
-// ==== Admin 控制 ====
-app.post('/admin/open', (req, res) => {
-  game.status = '下注中'
-  game.countdown = 20
-  game.result = '等待开奖'
-  betRecords.forEach(r => r.result = null)
-  io.emit('update', { players, game, betRecords })
-  res.json({ success: true })
-})
-
-app.post('/admin/next', (req, res) => {
-  // 随机开奖
-  const results = ['闲', '和', '庄']
-  const winning = results[Math.floor(Math.random() * results.length)]
-  game.result = winning
-  game.status = '开奖中'
-
-  // 计算结果
-  betRecords.forEach(r => {
-    if (r.option === winning) r.result = '赢'
-    else r.result = '输'
-    const player = players.find(p => p.id === r.playerId)
-    if (r.result === '赢') {
-      if (r.option === '和') player.balance += r.amount * 8
-      else if (r.option === '庄') player.balance += r.amount * 0.95
-      else player.balance += r.amount
+const io = new Server(server,{
+    cors:{
+        origin:"*"
     }
-  })
+});
 
-  game.status = '等待下注'
-  io.emit('update', { players, game, betRecords })
-  res.json({ success: true })
-})
 
-app.post('/admin/update-player', (req, res) => {
-  const { id, name, balance } = req.body
-  const player = players.find(p => p.id === id)
-  if (!player) return res.status(404).json({ success: false, message: 'Player not found' })
-  player.name = name
-  player.balance = balance
-  io.emit('update', { players, game, betRecords })
-  res.json({ success: true })
-})
+// =====================
+// 数据
+// =====================
 
-// ==== Socket.io ====
-io.on('connection', socket => {
-  socket.emit('update', { players, game, betRecords })
-})
+let players=[
+    {
+        id:"player1",
+        name:"player1",
+        balance:10000
+    }
+];
 
-const PORT = process.env.PORT || 10000
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+
+let game={
+
+    result:"等待开奖",
+
+    countdown:20,
+
+    betting:true
+
+};
+
+
+let records=[];
+
+
+// =====================
+// 同步广播
+// =====================
+
+function broadcast(){
+
+    io.emit("update",{
+
+        players,
+
+        game,
+
+        records
+
+    });
+
+}
+
+
+// =====================
+// 玩家接口
+// =====================
+
+
+app.get("/api/players",(req,res)=>{
+
+    res.json(players);
+
+});
+
+
+
+app.get("/api/player/:id",(req,res)=>{
+
+
+    let p=players.find(
+        x=>x.id===req.params.id
+    );
+
+
+    if(!p)
+    {
+
+        return res.json({
+            id:req.params.id,
+            name:req.params.id,
+            balance:0
+        })
+
+    }
+
+
+    res.json(p);
+
+
+});
+
+
+
+
+// =====================
+// 投注
+// =====================
+
+
+app.post("/api/bets",(req,res)=>{
+
+
+    let {
+        playerId,
+        option,
+        amount
+
+    }=req.body;
+
+
+
+    let player =
+    players.find(
+        x=>x.id===playerId
+    );
+
+
+
+    if(!player)
+    {
+
+        return res.json({
+            success:false,
+            msg:"玩家不存在"
+        })
+
+    }
+
+
+
+    if(player.balance < amount)
+    {
+
+        return res.json({
+
+            success:false,
+
+            msg:"余额不足"
+
+        })
+
+    }
+
+
+
+    player.balance -= amount;
+
+
+
+    let record={
+
+        id:Date.now(),
+
+        playerId,
+
+        option,
+
+        amount,
+
+        result:"等待开奖"
+
+    };
+
+
+    records.push(record);
+
+
+    broadcast();
+
+
+    res.json({
+
+        success:true,
+
+        record
+
+    })
+
+
+});
+
+
+
+// =====================
+// 获取下注记录
+// =====================
+
+
+app.get("/api/records",(req,res)=>{
+
+
+    res.json(records);
+
+
+});
+
+
+
+
+// =====================
+// 后台修改积分
+// =====================
+
+
+app.post("/admin/update-player",(req,res)=>{
+
+
+    let {
+
+        id,
+
+        name,
+
+        balance
+
+
+    }=req.body;
+
+
+
+    let player =
+    players.find(
+        x=>x.id===id
+    );
+
+
+    if(!player)
+    {
+
+        player={
+
+            id,
+
+            name,
+
+            balance
+
+        };
+
+
+        players.push(player);
+
+
+    }
+    else{
+
+
+        player.name=name;
+
+        player.balance=Number(balance);
+
+
+    }
+
+
+
+    broadcast();
+
+
+
+    res.json({
+
+        success:true,
+
+        player
+
+    })
+
+
+});
+
+
+
+
+// =====================
+// 后台开奖
+// =====================
+
+
+app.post("/admin/open",(req,res)=>{
+
+
+    let {
+
+        result
+
+    }=req.body;
+
+
+
+    game.result=result;
+
+
+    records.forEach(r=>{
+
+
+        if(r.option===result)
+        {
+
+            r.result="中奖";
+
+
+            let p=
+            players.find(
+                x=>x.id===r.playerId
+            );
+
+
+           
