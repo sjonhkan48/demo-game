@@ -3,7 +3,6 @@ const http = require("http");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Server } = require("socket.io");
-const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = http.createServer(app);
@@ -64,7 +63,7 @@ app.post("/api/bets", (req, res) => {
   player.balance -= betAmount;
 
   const record = {
-    id: uuidv4(),
+    id: Date.now().toString(),
     playerId,
     option,
     amount: betAmount,
