@@ -10,34 +10,15 @@
     <div class="result-box">开奖结果：<span>{{ result }}</span></div>
 
     <div class="board">
-      <div
-        v-for="area in areas"
-        :key="area.name"
-        class="area"
-        :class="area.color"
-        @click="selectArea(area)"
-      >
+      <div v-for="area in areas" :key="area.name" class="area" :class="area.color" @click="selectArea(area)">
         <div class="name">{{ area.label }}</div>
         <div class="odds">赔率 {{ area.odds }}</div>
       </div>
     </div>
 
     <div class="chips">
-      <div
-        v-for="chip in chips"
-        :key="chip.value"
-        class="chip"
-        :class="chip.color"
-        @click="selectedChip = chip.value"
-      >
-        {{ chip.value }}
-      </div>
-      <input
-        type="number"
-        min="1"
-        v-model.number="selectedChip"
-        placeholder="自定义下注金额"
-      />
+      <div v-for="chip in chips" :key="chip.value" class="chip" :class="chip.color" @click="selectedChip = chip.value">{{ chip.value }}</div>
+      <input type="number" min="1" v-model.number="selectedChip" placeholder="自定义下注金额" />
     </div>
 
     <div class="selected">
@@ -76,11 +57,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { getScore, getBets, createBet, getGame } from "../services/api";
+import { io } from "socket.io-client";
+import { createBet } from "../services/api";
 
-const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player") || "player1";
+const socket = io("https://demo-game-2.onrender.com"); // 改成你的后台地址
 
+const playerId = new URLSearchParams(window.location.search).get("player") || "player1";
 const balance = ref(0);
 const countdown = ref(20);
 const locked = ref(false);
@@ -103,66 +85,40 @@ const chips = [
   { value: 1000, color: "black" },
 ];
 
-// 加载玩家余额、投注记录和当前游戏状态
-async function load() {
-  try {
-    const s = await getScore(playerId);
-    balance.value = s.score;
-
-    const b = await getBets(playerId);
-    bets.value = b.reverse(); // 最新在上
-
-    const g = await getGame();
-    result.value = g.result || "等待开奖";
-    locked.value = g.status === "open";
-    countdown.value = g.countdown || 20;
-  } catch (e) {
-    console.log(e);
-  }
-}
-
-// 选择下注区域
 function selectArea(area) {
   if (!locked.value) selectedArea.value = area;
 }
 
-// 下注
 async function placeBet() {
-  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
-    alert("请选择下注区域或输入有效金额");
-    return;
-  }
-
-  const res = await createBet({
-    playerId,
-    area: selectedArea.value.label,
-    amount: Number(selectedChip.value),
-  });
-
-  if (res.success) {
-    balance.value = res.score;
-    selectedArea.value = null;
-    await load(); // 投注后刷新余额和记录
-  } else {
-    alert(res.message);
-  }
+  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) return;
+  const res = await createBet({ playerId, area: selectedArea.value.label, amount: Number(selectedChip.value) });
+  if (res.success) selectedArea.value = null;
 }
 
-// 倒计时和自动刷新
+// ----------------------
+// Socket.IO 实时接收
+// ----------------------
+socket.on("gameState", (data) => {
+  result.value = data.result;
+  bets.value = data.bets.reverse(); // 最新在上
+  const me = data.players.find(p => p.playerId === playerId);
+  balance.value = me ? me.score : 0;
+  locked.value = data.result !== "等待开奖";
+});
+
+// 启动倒计时
 let timer;
 onMounted(() => {
-  load();
-  timer = setInterval(async () => {
-    await load();
-    if (!locked.value && countdown.value > 0) {
-      countdown.value -= 1;
-    }
+  timer = setInterval(() => {
+    if (!locked.value && countdown.value > 0) countdown.value--;
+    else if (countdown.value === 0) countdown.value = 20;
   }, 1000);
 });
 onUnmounted(() => clearInterval(timer));
 </script>
 
 <style scoped>
+/* 保持原UI */
 .game-view {
   padding: 15px;
   font-family: "Microsoft YaHei";
@@ -171,36 +127,15 @@ onUnmounted(() => clearInterval(timer));
   color: #fff;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 22px;
-  margin-bottom: 20px;
-}
-
+.header { display: flex; justify-content: space-between; font-size: 22px; margin-bottom: 20px; }
 .balance { color: #ffd700; }
 .countdown.stop { color: red; }
 
 .result-box { text-align: center; font-size: 26px; margin-bottom: 20px; }
 .result-box span { color: #ffd700; font-size: 35px; }
 
-.board {
-  display: flex;
-  height: 230px;
-  border: 5px solid #c99b27;
-  border-radius: 25px;
-  overflow: hidden;
-  margin-bottom: 20px;
-}
-
-.area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-}
+.board { display: flex; height: 230px; border: 5px solid #c99b27; border-radius: 25px; overflow: hidden; margin-bottom: 20px; }
+.area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
 .area.blue { background: #063b8f; }
 .area.green { background: #16834b; }
 .area.red { background: #9b1212; }
@@ -208,24 +143,8 @@ onUnmounted(() => clearInterval(timer));
 .name { font-size: 55px; font-weight: bold; }
 .odds { font-size: 18px; }
 
-.chips {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.chip {
-  width: 65px;
-  height: 65px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 5px dashed white;
-  font-weight: bold;
-  cursor: pointer;
-}
+.chips { display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+.chip { width: 65px; height: 65px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 5px dashed white; font-weight: bold; cursor: pointer; }
 .chip.red { background: #d11; }
 .chip.blue { background: #1769aa; }
 .chip.green { background: #1b8d35; }
