@@ -227,8 +227,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  text-align: center;
+  padding: 0;
+  line-height: 1;
   box-sizing: border-box;
+  cursor: pointer;
 }
 .chip10 {
   background: #ff0000;
@@ -244,6 +247,11 @@ onMounted(() => {
 }
 .chip1000 {
   background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0;
 }
 
 /* 当前下注 */
