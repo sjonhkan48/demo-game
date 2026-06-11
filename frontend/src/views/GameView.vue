@@ -1,342 +1,622 @@
 <template>
-  <div class="game-view">
-    <div class="header">
-      <div class="balance">💰 当前余额：{{ balance }}</div>
-      <div class="countdown" :class="{ stop: locked }">
-        {{ locked ? "停止下注" : "下注倒计时 " + countdown + " 秒" }}
-      </div>
-    </div>
 
-    <div class="result-box">开奖结果：<span>{{ result }}</span></div>
+<div class="game">
 
-    <div class="board">
-      <div
-        v-for="area in areas"
-        :key="area.name"
-        class="area"
-        :class="area.color"
-        @click="selectArea(area)"
-      >
-        <div class="name">{{ area.label }}</div>
-        <div class="odds">赔率 {{ area.odds }}</div>
-      </div>
-    </div>
 
-    <div class="chips">
-      <div
-        v-for="chip in chips"
-        :key="chip.value"
-        class="chip"
-        :class="chip.color"
-        @click="selectedChip = chip.value"
-      >
-        {{ chip.value }}
-      </div>
-      <input
-        type="number"
-        min="1"
-        v-model.number="selectedChip"
-        placeholder="自定义下注金额"
-      />
-    </div>
+<div class="top">
 
-    <div class="selected">
-      当前筹码：{{ selectedChip }}<br />
-      当前下注：{{ selectedArea ? selectedArea.label : "未选择" }}<br />
-      <button @click="placeBet" :disabled="locked || !selectedArea">确认下注</button>
-    </div>
+<div class="money">
+💰 当前余额: {{ balance }}
+</div>
 
-    <div class="records">
-      <h3>投注记录</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>玩家ID</th>
-            <th>区域</th>
-            <th>金额</th>
-            <th>结果</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="b in bets" :key="b._id">
-            <td>{{ b.playerId }}</td>
-            <td>{{ b.area }}</td>
-            <td>{{ b.amount }}</td>
-            <td>
-              <span v-if="b.result==='pending'">等待开奖</span>
-              <span v-if="b.result==='win'" class="win">赢</span>
-              <span v-if="b.result==='lose'" class="lose">输</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+
+<div class="timer">
+下注倒计时 {{ time }} 秒
+</div>
+
+</div>
+
+
+
+<div class="result">
+
+开奖结果:
+<span>
+{{ result }}
+</span>
+
+</div>
+
+
+
+<div class="areas">
+
+
+<div 
+class="area idle"
+@click="choose('闲')">
+
+<div>
+闲
+</div>
+
+赔率 1
+
+</div>
+
+
+
+<div 
+class="area draw"
+@click="choose('和')">
+
+<div>
+和
+</div>
+
+赔率 8
+
+</div>
+
+
+
+<div 
+class="area banker"
+@click="choose('庄')">
+
+<div>
+庄
+</div>
+
+赔率 0.95
+
+</div>
+
+
+</div>
+
+
+
+
+
+<div class="chips">
+
+
+<button
+v-for="c in chips"
+:key="c"
+@click="amount=c">
+
+{{c}}
+
+</button>
+
+
+<input v-model.number="amount">
+
+
+</div>
+
+
+
+
+
+<div class="info">
+
+
+当前筹码:
+{{amount}}
+
+
+<br>
+
+
+当前下注:
+{{betType || '未选择'}}
+
+
+
+<br>
+
+
+<button 
+@click="bet"
+:disabled="!betType">
+
+确认下注
+
+</button>
+
+
+</div>
+
+
+
+
+
+
+<h3>
+投注记录
+</h3>
+
+
+
+<table>
+
+
+<tr>
+
+<th>玩家ID</th>
+
+<th>区域</th>
+
+<th>金额</th>
+
+<th>结果</th>
+
+
+</tr>
+
+
+
+<tr
+v-for="b in bets"
+:key="b.id">
+
+
+<td>{{b.player}}</td>
+
+<td>{{b.type}}</td>
+
+<td>{{b.amount}}</td>
+
+<td>{{b.result}}</td>
+
+
+</tr>
+
+
+
+</table>
+
+
+
+</div>
+
 </template>
 
+
+
+
+
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import axios from "axios";
-import { io } from "socket.io-client";
 
-const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player") || "player1";
 
-const balance = ref(0);
-const countdown = ref(20);
-const locked = ref(false);
-const result = ref("等待开奖");
-const bets = ref([]);
-const selectedArea = ref(null);
-const selectedChip = ref(100);
+import {
+ref,
+onMounted,
+onUnmounted
 
-const areas = [
-  { name: "xian", label: "闲", color: "blue", odds: 1 },
-  { name: "he", label: "和", color: "green", odds: 8 },
-  { name: "zhuang", label: "庄", color: "red", odds: 0.95 },
-];
+} from "vue"
 
-const chips = [
-  { value: 10, color: "red" },
-  { value: 50, color: "blue" },
-  { value: 100, color: "green" },
-  { value: 500, color: "purple" },
-  { value: 1000, color: "black" },
-];
 
-const API_URL = "https://demo-game-3.onrender.com";
-const socket = io(API_URL);
 
-// ----------------------
-// 获取玩家余额
-async function loadScore() {
-  const res = await axios.get(`${API_URL}/api/score/${playerId}`);
-  balance.value = res.data.score;
+import axios from "axios"
+
+
+
+
+// 后端地址
+
+const API =
+"https://demo-game-3.onrender.com"
+
+
+
+
+
+// 玩家ID修复
+
+let player =
+new URLSearchParams(
+window.location.search
+)
+.get("player")
+
+
+
+if(
+!player ||
+player==="undefined"
+
+){
+
+player="player1"
+
 }
 
-// ----------------------
-// 获取投注记录
-async function loadBets() {
-  const res = await axios.get(`${API_URL}/api/bets/${playerId}`);
-  bets.value = res.data.reverse();
+
+
+
+
+const balance=ref(0)
+
+
+
+const bets=ref([])
+
+
+
+const result=ref("等待开奖")
+
+
+
+const time=ref(20)
+
+
+
+const betType=ref("")
+
+
+
+const amount=ref(100)
+
+
+
+
+const chips=[10,50,100,500,1000]
+
+
+
+
+
+
+function choose(v){
+
+betType.value=v
+
 }
 
-// ----------------------
-// 获取游戏状态
-async function loadResult() {
-  const res = await axios.get(`${API_URL}/api/result`);
-  result.value = res.data.result || "等待开奖";
-  locked.value = res.data.result && res.data.result !== "等待开奖";
+
+
+
+
+
+// 获取玩家信息
+
+async function load(){
+
+
+try{
+
+
+let r=
+await axios.get(
+`${API}/api/player/${player}`
+)
+
+
+balance.value =
+r.data.balance
+
+
+
+
+
+let b =
+await axios.get(
+`${API}/api/bets/${player}`
+)
+
+
+bets.value =
+b.data
+
+
+
+
+
+let game =
+await axios.get(
+`${API}/api/game`
+)
+
+
+
+result.value =
+game.data.result
+
+
+time.value =
+game.data.time
+
+
+
+}catch(e){
+
+
+console.log(e)
+
+
 }
 
-// ----------------------
-// 下注操作
-async function placeBet() {
-  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
-    alert("请选择下注区域或输入有效金额");
-    return;
-  }
-  const res = await axios.post(`${API_URL}/api/bet`, {
-    playerId,
-    area: selectedArea.value.label,
-    amount: Number(selectedChip.value),
-  });
 
-  if (res.data.success) {
-    balance.value = res.data.score;
-    selectedArea.value = null;
-  } else {
-    alert(res.data.message);
-  }
+
 }
 
-// ----------------------
-// 倒计时
-let timer = null;
-function startCountdown() {
-  countdown.value = 20;
-  locked.value = false;
-  timer = setInterval(() => {
-    if (!locked.value) {
-      countdown.value--;
-      if (countdown.value <= 0) locked.value = true;
-    }
-  }, 1000);
+
+
+
+
+//下注
+
+
+async function bet(){
+
+
+await axios.post(
+`${API}/api/bet`,
+{
+
+player,
+
+type:betType.value,
+
+amount:amount.value
+
+
 }
 
-// ----------------------
-// WebSocket 实时同步
-socket.on("gameUpdate", async () => {
-  await loadScore();
-  await loadBets();
-  await loadResult();
-});
+)
 
-// ----------------------
-onMounted(async () => {
-  await loadScore();
-  await loadBets();
-  await loadResult();
-  startCountdown();
-});
 
-onUnmounted(() => {
-  clearInterval(timer);
-  socket.disconnect();
-});
+await load()
+
+
+}
+
+
+
+
+
+
+
+let timer
+
+
+
+
+onMounted(()=>{
+
+
+load()
+
+
+timer=setInterval(()=>{
+
+
+load()
+
+
+},1000)
+
+
+
+})
+
+
+
+onUnmounted(()=>{
+
+
+clearInterval(timer)
+
+
+})
+
+
+
 </script>
 
+
+
+
+
 <style scoped>
-.game-view {
-  padding: 15px;
-  font-family: "Microsoft YaHei";
-  min-height: 100vh;
-  background: linear-gradient(#07351f, #02160d);
-  color: #fff;
+
+
+.game{
+
+background:#003b25;
+
+min-height:100vh;
+
+color:white;
+
+padding:15px;
+
+font-size:20px;
+
+
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 22px;
-  margin-bottom: 20px;
+
+
+
+.top{
+
+display:flex;
+
+justify-content:space-between;
+
+
 }
 
-.balance {
-  color: #ffd700;
+
+.money{
+
+color:#ffd700;
+
+
 }
 
-.countdown.stop {
-  color: red;
+
+
+
+.result{
+
+text-align:center;
+
+font-size:30px;
+
+margin:30px;
+
+
 }
 
-.result-box {
-  text-align: center;
-  font-size: 26px;
-  margin-bottom: 20px;
+
+.result span{
+
+color:#ffd700;
+
+
 }
 
-.result-box span {
-  color: #ffd700;
-  font-size: 35px;
+
+
+
+
+.areas{
+
+display:flex;
+
+border:5px solid #d8a600;
+
+border-radius:25px;
+
+overflow:hidden;
+
+
 }
 
-.board {
-  display: flex;
-  height: 230px;
-  border: 5px solid #c99b27;
-  border-radius: 25px;
-  overflow: hidden;
-  margin-bottom: 20px;
+
+
+.area{
+
+
+width:33%;
+
+height:230px;
+
+display:flex;
+
+flex-direction:column;
+
+align-items:center;
+
+justify-content:center;
+
+
+font-size:20px;
+
+
 }
 
-.area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-}
-.area.blue {
-  background: #063b8f;
-}
-.area.green {
-  background: #16834b;
-}
-.area.red {
-  background: #9b1212;
+
+.area div{
+
+font-size:55px;
+
+font-weight:bold;
+
+
 }
 
-.name {
-  font-size: 55px;
-  font-weight: bold;
-}
-.odds {
-  font-size: 18px;
+
+
+.idle{
+
+background:#10459b;
+
 }
 
-.chips {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.chip {
-  width: 65px;
-  height: 65px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 5px dashed white;
-  font-weight: bold;
-  cursor: pointer;
-}
-.chip.red {
-  background: #d11;
-}
-.chip.blue {
-  background: #1769aa;
-}
-.chip.green {
-  background: #1b8d35;
-}
-.chip.purple {
-  background: #7020a0;
-}
-.chip.black {
-  background: #111;
+
+.draw{
+
+background:#16834c;
+
 }
 
-input[type="number"] {
-  width: 80px;
-  margin-left: 10px;
-  padding: 5px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
+
+.banker{
+
+background:#a90f13;
+
+
 }
 
-.selected {
-  text-align: center;
-  font-size: 20px;
-  margin-bottom: 20px;
+
+
+.chips{
+
+text-align:center;
+
+margin:30px;
+
+
 }
 
-.records table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.records td,
-.records th {
-  border: 1px solid #777;
-  padding: 8px;
-  text-align: center;
-}
-.win {
-  color: #00ff88;
-}
-.lose {
-  color: red;
+
+.chips button{
+
+width:75px;
+
+height:75px;
+
+border-radius:50%;
+
+margin:10px;
+
 }
 
-@media (max-width: 600px) {
-  .name {
-    font-size: 40px;
-  }
-  .board {
-    height: 180px;
-  }
-  .header {
-    font-size: 16px;
-  }
-  .chip {
-    width: 55px;
-    height: 55px;
-  }
-  input[type="number"] {
-    width: 60px;
-  }
+
+
+
+input{
+
+width:90px;
+
+height:50px;
+
 }
+
+
+.info{
+
+text-align:center;
+
+
+}
+
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+
+}
+
+
+td,th{
+
+border:1px solid white;
+
+padding:8px;
+
+}
+
+
+
 </style>
