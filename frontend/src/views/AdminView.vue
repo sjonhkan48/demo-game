@@ -61,7 +61,7 @@
           <td>{{ r.playerId }}</td>
           <td>{{ r.area }}</td>
           <td>{{ r.amount }}</td>
-          <td>{{ r.result === 'pending' ? '等待开奖' : r.result === 'win' ? '赢' : '输' }}</td>
+          <td>{{ r.result==='win'?'赢':'输' }}</td>
         </tr>
       </tbody>
     </table>
@@ -70,38 +70,43 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import axios from "axios";
-
-const API = "https://demo-game-2.onrender.com";
+import { getPlayers, updatePlayer, getRecords, adminOpen, adminNext, createInvite } from "../services/api";
 
 const players = ref([]);
 const records = ref([]);
-
 const openResult = ref("庄");
 const result = ref("等待开奖");
 const status = ref("下注中");
-
 const inviteUrl = ref("");
 const inviteId = ref("");
 
 async function loadPlayers() {
-  const res = await axios.get(`${API}/admin/players`);
-  players.value = res.data;
+  players.value = await getPlayers();
 }
-
+async function loadRecords() {
+  records.value = await getRecords();
+}
 async function savePlayer(p) {
-  await axios.post(`${API}/admin/player/${p.playerId}`, {
-    name: p.name,
-    score: p.score,
-  });
-  alert("保存成功");
+  await updatePlayer(p.playerId, { name: p.name, score: p.score });
   loadPlayers();
 }
-
+async function openGame() {
+  const res = await adminOpen(openResult.value);
+  result.value = res.result;
+  status.value = "开奖完成";
+  loadRecords();
+}
+async function nextRound() {
+  await adminNext();
+  status.value = "下注中";
+  result.value = "等待开奖";
+  loadRecords();
+  loadPlayers();
+}
 async function invite() {
-  const res = await axios.post(`${API}/admin/invite`);
-  inviteUrl.value = res.data.url;
-  inviteId.value = res.data.playerId;
+  const res = await createInvite();
+  inviteId.value = res.playerId;
+  inviteUrl.value = res.url;
   loadPlayers();
 }
 
@@ -109,63 +114,7 @@ function openLink(p) {
   window.open(`/?player=${p.playerId}`);
 }
 
-async function openGame() {
-  const res = await axios.post(`${API}/admin/open`, { result: openResult.value });
-  result.value = res.data.result;
-  status.value = "开奖完成";
-  loadRecords();
-}
-
-async function nextRound() {
-  await axios.post(`${API}/admin/next`);
-  status.value = "下注中";
-  result.value = "等待开奖";
-}
-
-async function loadRecords() {
-  const res = await axios.get(`${API}/admin/records`);
-  records.value = res.data;
-}
-
 onMounted(() => {
   loadPlayers();
   loadRecords();
 });
-</script>
-
-<style scoped>
-.admin {
-  padding: 20px;
-  font-family: "Microsoft YaHei";
-}
-
-.game-box,
-.invite {
-  padding: 15px;
-  background: #eee;
-  margin-bottom: 20px;
-}
-
-button {
-  margin: 5px;
-  padding: 8px 15px;
-  cursor: pointer;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 30px;
-}
-
-td,
-th {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: center;
-}
-
-input {
-  width: 120px;
-}
-</style>
