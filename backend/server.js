@@ -1,127 +1,488 @@
-// server.js
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const { Server } = require("socket.io");
+const { v4: uuidv4 } = require("uuid");
+
 
 const app = express();
+
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
+
+
+const io = new Server(server,{
+    cors:{
+        origin:"*"
+    }
 });
+
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// 模拟数据存储
-let players = {};
-let betRecords = [];
-let gameState = {
-  status: '等待开奖',
-  result: null,
-  countdown: 20
+
+// =======================
+// 数据
+// =======================
+
+
+let players = {
+
+    player1:{
+        id:"player1",
+        name:"player1",
+        balance:10000
+    }
+
 };
 
-// 创建玩家
-app.post('/api/player', (req, res) => {
-  const id = uuidv4();
-  const { name, balance } = req.body;
-  players[id] = { id, name, balance: balance || 10000 };
-  res.json(players[id]);
-});
 
-// 获取单个玩家
-app.get('/api/player/:id', (req, res) => {
-  const player = players[req.params.id];
-  if (!player) return res.status(404).json({ error: 'Player not found' });
-  res.json(player);
-});
+let records=[];
 
-// 获取所有玩家
-app.get('/api/players', (req, res) => {
-  res.json(Object.values(players));
-});
 
-// 获取游戏状态
-app.get('/api/game', (req, res) => {
-  res.json({
-    result: gameState.result || '等待开奖',
-    countdown: gameState.countdown
-  });
-});
+let game={
 
-// 玩家下注
-app.post('/api/bets', (req, res) => {
-  const { playerId, option, amount } = req.body;
-  const player = players[playerId];
-  if (!player) return res.status(404).json({ error: 'Player not found' });
-  if (player.balance < amount) return res.status(400).json({ error: '余额不足' });
+    status:"下注中",
 
-  player.balance -= amount;
-  const record = {
-    id: uuidv4(),
-    playerId,
-    option,
-    amount,
-    result: null
-  };
-  betRecords.push(record);
+    result:"等待开奖",
 
-  io.emit('update', { players: Object.values(players), betRecords, game: gameState });
-  res.json({ success: true });
-});
+    countdown:20
 
-// 获取投注记录
-app.get('/api/records', (req, res) => {
-  res.json(betRecords);
-});
+};
 
-// 管理后台 API
-app.post('/admin/update-player', (req, res) => {
-  const { id, name, balance } = req.body;
-  if (!players[id]) return res.status(404).json({ error: 'Player not found' });
-  players[id].name = name;
-  players[id].balance = balance;
-  io.emit('update', { players: Object.values(players), betRecords, game: gameState });
-  res.json({ success: true });
-});
 
-// 开奖
-app.post('/admin/open', (req, res) => {
-  const { result } = req.body;
-  gameState.result = result;
-  gameState.status = '开奖结束';
-  
-  // 更新投注结果
-  betRecords.forEach(record => {
-    if (!record.result) {
-      if (record.option === result) record.result = '赢';
-      else record.result = '输';
+
+// =======================
+// 玩家接口
+// =======================
+
+
+
+app.get("/api/player/:id",(req,res)=>{
+
+
+    let player=players[req.params.id];
+
+
+    if(!player){
+
+        return res.status(404).json({
+            error:"player not found"
+        });
+
     }
-  });
 
-  io.emit('update', { players: Object.values(players), betRecords, game: gameState });
-  res.json({ success: true });
+
+    res.json(player);
+
+
 });
 
+
+
+
+app.get("/api/players",(req,res)=>{
+
+
+    res.json(
+        Object.values(players)
+    );
+
+
+});
+
+
+
+
+
+// =======================
+// 游戏状态
+// =======================
+
+
+app.get("/api/game",(req,res)=>{
+
+
+    res.json({
+
+        result:game.result,
+
+        time:game.countdown,
+
+        status:game.status
+
+    });
+
+
+
+});
+
+
+
+
+
+// =======================
+// 投注
+// =======================
+
+
+app.post("/api/bets",(req,res)=>{
+
+
+    let {
+
+        playerId,
+
+        option,
+
+        amount
+
+
+    }=req.body;
+
+
+
+    let player=players[playerId];
+
+
+
+    if(!player){
+
+        return res.status(404).json({
+            error:"玩家不存在"
+        });
+
+    }
+
+
+
+    amount=Number(amount);
+
+
+
+    if(player.balance < amount){
+
+
+        return res.status(400).json({
+
+            error:"余额不足"
+
+        });
+
+
+    }
+
+
+
+    player.balance-=amount;
+
+
+
+    let record={
+
+
+        id:uuidv4(),
+
+        playerId,
+
+        option,
+
+        amount,
+
+        result:"等待开奖"
+
+
+    };
+
+
+    records.push(record);
+
+
+
+    io.emit("update",{
+
+        players:Object.values(players),
+
+        records,
+
+        game
+
+    });
+
+
+
+    res.json({
+
+        success:true,
+
+        player
+
+    });
+
+
+
+});
+
+
+
+
+
+// =======================
+// 投注记录
+// =======================
+
+
+app.get("/api/records",(req,res)=>{
+
+
+    res.json(records);
+
+
+});
+
+
+
+
+// =======================
+// 后台 修改玩家
+// =======================
+
+
+
+app.post("/admin/update-player",(req,res)=>{
+
+
+    let {
+
+        id,
+
+        name,
+
+        balance
+
+
+    }=req.body;
+
+
+
+    if(!players[id]){
+
+
+        players[id]={
+
+            id,
+
+            name,
+
+            balance:Number(balance)
+
+        };
+
+
+    }else{
+
+
+        players[id].name=name;
+
+        players[id].balance=Number(balance);
+
+
+
+    }
+
+
+
+    io.emit("update",{
+
+        players:Object.values(players),
+
+        records,
+
+        game
+
+
+    });
+
+
+
+    res.json({
+
+        success:true
+
+    });
+
+
+
+});
+
+
+
+
+// =======================
+// 后台开奖
+// =======================
+
+
+
+app.post("/admin/open",(req,res)=>{
+
+
+    let result=req.body.result;
+
+
+
+    game.result=result;
+
+    game.status="开奖完成";
+
+
+
+    records.forEach(r=>{
+
+
+        if(r.result==="等待开奖"){
+
+
+            if(r.option===result){
+
+                r.result="赢";
+
+            }else{
+
+                r.result="输";
+
+            }
+
+
+        }
+
+
+    });
+
+
+
+    io.emit("update",{
+
+        players:Object.values(players),
+
+        records,
+
+        game
+
+
+    });
+
+
+
+    res.json({
+
+        success:true
+
+    });
+
+
+
+});
+
+
+
+
+
+// =======================
 // 下一轮
-app.post('/admin/next', (req, res) => {
-  gameState.result = null;
-  gameState.status = '下轮开始';
-  gameState.countdown = 20;
-  betRecords = []; // 清空投注
-  io.emit('update', { players: Object.values(players), betRecords, game: gameState });
-  res.json({ success: true });
+// =======================
+
+
+app.post("/admin/next",(req,res)=>{
+
+
+    game.status="下注中";
+
+    game.result="等待开奖";
+
+    game.countdown=20;
+
+
+    records=[];
+
+
+
+    io.emit("update",{
+
+        players:Object.values(players),
+
+        records,
+
+        game
+
+
+    });
+
+
+
+    res.json({
+
+        success:true
+
+    });
+
+
+
 });
 
-// Socket.io
-io.on('connection', (socket) => {
-  console.log('客户端连接:', socket.id);
-  socket.emit('update', { players: Object.values(players), betRecords, game: gameState });
+
+
+
+
+// =======================
+// Socket
+// =======================
+
+
+io.on("connection",(socket)=>{
+
+
+    console.log("socket连接:",socket.id);
+
+
+
+    socket.emit("update",{
+
+        players:Object.values(players),
+
+        records,
+
+        game
+
+
+    });
+
+
+
 });
 
-// 启动服务器
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
+
+
+// =======================
+// Render启动
+// =======================
+
+
+const PORT=process.env.PORT || 3000;
+
+
+
+server.listen(PORT,()=>{
+
+
+    console.log(
+
+        "server running "+PORT
+
+    );
+
+
+});
