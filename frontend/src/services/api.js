@@ -1,7 +1,7 @@
 import axios from "axios";
 
 
-const API="https://你的后端Render地址";
+const API="https://https://demo-game-3.onrender.com";
 
 
 export function getScore(id){
