@@ -56,101 +56,309 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import axios from "axios";
 
-const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player") || "player1";
 
-const API = "https://demo-game-3.onrender.com";
+import {
+ref,
+onMounted,
+onUnmounted
+} from "vue";
 
-const balance = ref(0);
-const countdown = ref(20);
-const locked = ref(false);
-const result = ref("等待开奖");
-const bets = ref([]);
-const selectedArea = ref(null);
-const selectedChip = ref(100);
 
-const areas = [
-  { name: "xian", label: "闲", color: "blue", odds: 1 },
-  { name: "he", label: "和", color: "green", odds: 8 },
-  { name: "zhuang", label: "庄", color: "red", odds: 0.95 },
+import {
+getScore,
+getBets,
+createBet
+}
+from "../services/api";
+
+
+
+const playerId =
+new URLSearchParams(
+window.location.search
+).get("player")
+||
+"player1";
+
+
+
+
+
+const balance=ref(0);
+
+const result=ref(
+"等待开奖"
+);
+
+
+const locked=ref(false);
+
+
+const countdown=ref(20);
+
+
+
+const bets=ref([]);
+
+
+
+const selectedArea=ref(null);
+
+
+const selectedChip=ref(100);
+
+
+
+
+
+
+const areas=[
+
+{
+label:"闲",
+color:"blue",
+odds:1
+},
+
+{
+label:"和",
+color:"green",
+odds:8
+},
+
+{
+label:"庄",
+color:"red",
+odds:0.95
+}
+
 ];
 
-const chips = [
-  { value: 10, color: "red" },
-  { value: 50, color: "blue" },
-  { value: 100, color: "green" },
-  { value: 500, color: "purple" },
-  { value: 1000, color: "black" },
+
+
+
+
+const chips=[
+
+{
+value:10,
+color:"red"
+},
+
+{
+value:50,
+color:"blue"
+},
+
+{
+value:100,
+color:"green"
+},
+
+{
+value:500,
+color:"purple"
+},
+
+{
+value:1000,
+color:"black"
+}
+
 ];
 
-async function loadScore() {
-  const res = await axios.get(`${API}/api/score/${playerId}`);
-  balance.value = res.data.score;
+
+
+
+
+
+
+
+
+async function load(){
+
+
+
+//余额
+
+let s =
+await getScore(playerId);
+
+
+balance.value=s.score;
+
+
+
+
+
+//记录
+
+let b =
+await getBets(playerId);
+
+
+bets.value=b;
+
+
+
+
+
+
+//后台状态
+
+let g =
+await fetch(
+"https://你的后台地址/api/game"
+)
+.then(r=>r.json());
+
+
+
+
+result.value =
+g.result || "等待开奖";
+
+
+
+locked.value =
+g.status!=="betting";
+
+
+
+
+
+if(g.status==="betting"){
+
+
+countdown.value=
+g.countdown;
+
+
 }
 
-async function loadBets() {
-  const res = await axios.get(`${API}/api/bets/${playerId}`);
-  bets.value = res.data.reverse(); // 最新记录在上
+
+
+
+
+
 }
 
-async function loadResult() {
-  const res = await axios.get(`${API}/api/result`);
-  result.value = res.data.result || "等待开奖";
-  locked.value = !!res.data.result;
+
+
+
+
+
+
+
+
+function selectArea(a){
+
+
+if(!locked.value)
+
+selectedArea.value=a;
+
+
+
 }
 
-function selectArea(area) {
-  if (!locked.value) selectedArea.value = area;
+
+
+
+
+
+
+
+async function placeBet(){
+
+
+
+let res =
+await createBet({
+
+playerId,
+
+area:selectedArea.value.label,
+
+amount:selectedChip.value
+
+
+});
+
+
+
+if(res.success){
+
+
+
+balance.value=
+res.score;
+
+
+await load();
+
+
+
+selectedArea.value=null;
+
+
+}else{
+
+
+alert(res.message);
+
+
 }
 
-async function placeBet() {
-  if (!selectedArea.value || !selectedChip.value || selectedChip.value <= 0) {
-    alert("请选择下注区域或输入有效金额");
-    return;
-  }
 
-  const res = await axios.post(`${API}/api/bet`, {
-    playerId,
-    area: selectedArea.value.label,
-    amount: selectedChip.value,
-  });
 
-  if (res.data.success) {
-    balance.value = res.data.score;
-    await loadBets();
-    selectedArea.value = null;
-  } else {
-    alert(res.data.message);
-  }
+
 }
 
-// 倒计时逻辑
+
+
+
+
+
+
+
 let timer;
-async function tick() {
-  const res = await axios.get(`${API}/api/result`);
-  locked.value = !!res.data.result;
 
-  if (!locked.value) {
-    countdown.value = countdown.value > 0 ? countdown.value - 1 : 0;
-  }
 
-  await loadScore();
-  await loadBets();
-  await loadResult();
-}
+onMounted(()=>{
 
-onMounted(() => {
-  countdown.value = 20;
-  tick();
-  timer = setInterval(tick, 1000);
+
+load();
+
+
+
+timer=setInterval(()=>{
+
+
+load();
+
+
+},1500);
+
+
+
 });
 
-onUnmounted(() => {
-  clearInterval(timer);
+
+
+
+
+onUnmounted(()=>{
+
+
+clearInterval(timer);
+
+
 });
+
+
+
 </script>
 
 <style scoped>
