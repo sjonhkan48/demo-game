@@ -182,37 +182,131 @@ async function load(){
 
 //余额
 
+let s =<script setup>
+
+import {
+ref,
+onMounted,
+onUnmounted
+} from "vue";
+
+import {
+getScore,
+getBets,
+createBet,
+getGame
+}
+from "../services/api";
+
+
+
+const playerId =
+new URLSearchParams(
+window.location.search
+).get("player")
+||
+"player1";
+
+
+
+const balance=ref(0);
+
+
+const countdown=ref(20);
+
+
+const locked=ref(false);
+
+
+const result=ref("等待开奖");
+
+
+
+const bets=ref([]);
+
+
+
+const selectedArea=ref(null);
+
+
+
+const selectedChip=ref(100);
+
+
+
+
+
+const areas=[
+
+{
+name:"xian",
+label:"闲",
+color:"blue",
+odds:1
+},
+
+{
+name:"he",
+label:"和",
+color:"green",
+odds:8
+},
+
+{
+name:"zhuang",
+label:"庄",
+color:"red",
+odds:0.95
+}
+
+
+];
+
+
+
+
+const chips=[
+
+{value:10,color:"red"},
+{value:50,color:"blue"},
+{value:100,color:"green"},
+{value:500,color:"purple"},
+{value:1000,color:"black"}
+
+];
+
+
+
+
+
+
+async function load(){
+
+
+
+try{
+
+
 let s =
 await getScore(playerId);
+
 
 
 balance.value=s.score;
 
 
 
-
-
-//记录
-
 let b =
 await getBets(playerId);
+
 
 
 bets.value=b;
 
 
 
-
-
-
-//后台状态
-
 let g =
-await fetch(
-"https://你的后台地址/api/game"
-)
-.then(r=>r.json());
-
+await getGame();
 
 
 
@@ -222,23 +316,15 @@ g.result || "等待开奖";
 
 
 locked.value =
-g.status!=="betting";
+g.status==="open";
 
 
 
+}catch(e){
 
-
-if(g.status==="betting"){
-
-
-countdown.value=
-g.countdown;
-
+console.log(e);
 
 }
-
-
-
 
 
 
@@ -250,19 +336,15 @@ g.countdown;
 
 
 
-
-
-function selectArea(a){
+function selectArea(area){
 
 
 if(!locked.value)
 
-selectedArea.value=a;
-
+selectedArea.value=area;
 
 
 }
-
 
 
 
@@ -274,6 +356,12 @@ async function placeBet(){
 
 
 
+if(!selectedArea.value)
+
+return;
+
+
+
 let res =
 await createBet({
 
@@ -281,8 +369,7 @@ playerId,
 
 area:selectedArea.value.label,
 
-amount:selectedChip.value
-
+amount:Number(selectedChip.value)
 
 });
 
@@ -292,30 +379,20 @@ if(res.success){
 
 
 
-balance.value=
-res.score;
-
-
-await load();
-
+balance.value=res.score;
 
 
 selectedArea.value=null;
 
 
-}else{
-
-
-alert(res.message);
+load();
 
 
 }
 
 
 
-
 }
-
 
 
 
@@ -324,6 +401,7 @@ alert(res.message);
 
 
 let timer;
+
 
 
 onMounted(()=>{
@@ -339,12 +417,11 @@ timer=setInterval(()=>{
 load();
 
 
-},1500);
+},2000);
 
 
 
 });
-
 
 
 
@@ -356,7 +433,6 @@ clearInterval(timer);
 
 
 });
-
 
 
 </script>
