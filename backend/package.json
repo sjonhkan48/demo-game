@@ -12,7 +12,8 @@
     "express-static": "^1.2.6",
     "mongoose": "^9.6.3",
     "serve-static": "^2.2.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "uuid": "^14.0.0"
   },
   "description": "",
   "keywords": [],
