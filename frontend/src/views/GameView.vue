@@ -1,6 +1,6 @@
 <template>
   <div class="game-container">
-    <!-- 余额和倒计时 -->
+    <!-- 上方余额和倒计时 -->
     <div class="balance-timer">
       <span class="balance">💰 当前余额：{{ player.balance }}</span>
       <span class="countdown">下注倒计时 {{ countdown }} 秒</span>
@@ -29,11 +29,11 @@
     <div class="chips">
       <button
         v-for="chip in chips"
-        :key="chip"
-        :class="'chip'+chip"
-        @click="selectChip(chip)"
+        :key="chip.value"
+        :class="'chip'+chip.value"
+        @click="selectChip(chip.value)"
       >
-        {{ chip }}
+        {{ chip.value }}
       </button>
       <input type="number" v-model.number="customBet" placeholder="自定义下注"/>
     </div>
@@ -73,7 +73,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { io } from 'socket.io-client'
 import axios from 'axios'
 
-const player = reactive({ id: 'player1', balance: 10000 })
+const player = reactive({ id: 'player1', balance: 1000 })
 const game = reactive({ result: '等待开奖' })
 const countdown = ref(20)
 const canBet = ref(true)
@@ -83,7 +83,13 @@ const options = [
   { name: '和', color: '#14853d', odds: 8 },
   { name: '庄', color: '#b31319', odds: 0.95 }
 ]
-const chips = [10, 50, 100, 500, 1000]
+const chips = [
+  { value: 10, color: 'red' },
+  { value: 50, color: 'blue' },
+  { value: 100, color: 'green' },
+  { value: 500, color: 'purple' },
+  { value: 1000, color: 'black' }
+]
 const selectedChip = ref(0)
 const customBet = ref(0)
 const currentOption = ref('')
@@ -99,28 +105,30 @@ function choose(option) {
   currentOption.value = option
 }
 
-async function placeBet() {
+function placeBet() {
   if (!currentOption.value) return alert('请选择投注区域')
   const amount = customBet.value || selectedChip.value
   if (amount > player.balance) return alert('余额不足')
 
-  const r = await axios.post('/api/bets', {
+  // 更新余额
+  player.balance -= amount
+
+  // 更新下注记录
+  records.value.push({
+    id: Date.now(),
     playerId: player.id,
     option: currentOption.value,
-    amount
+    amount,
+    result: '等待开奖'
   })
-  if (r.data.success) {
-    player.balance -= amount
-    records.value.push({
-      id: Date.now(),
-      playerId: player.id,
-      option: currentOption.value,
-      amount,
-      result: '等待开奖'
-    })
-  }
+
+  // 重置选择
+  selectedChip.value = 0
+  customBet.value = 0
+  currentOption.value = ''
 }
 
+// 倒计时
 function startCountdown() {
   const interval = setInterval(() => {
     if (countdown.value > 0) countdown.value--
@@ -131,6 +139,7 @@ function startCountdown() {
   }, 1000)
 }
 
+// 样式 class
 function resultClass() {
   if (game.result === '等待开奖') return 'waiting'
   return game.result === '庄' || game.result === '闲' ? 'win' : 'lose'
@@ -162,6 +171,7 @@ onMounted(() => {
   background-color: #0f2d17;
   color: #fff;
   padding: 20px;
+  font-family: Arial, sans-serif;
 }
 .balance-timer {
   display: flex;
@@ -196,6 +206,7 @@ onMounted(() => {
   border-radius: 8px;
   color: #fff;
 }
+
 .chips {
   margin: 10px 0;
 }
@@ -214,6 +225,7 @@ onMounted(() => {
 .chip100 { background:green; }
 .chip500 { background:purple; }
 .chip1000 { background:black; color:white; }
+
 .current-bet {
   margin: 10px 0;
 }
