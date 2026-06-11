@@ -15,7 +15,7 @@
         v-for="option in options"
         :key="option.name"
         :style="{ backgroundColor: option.color }"
-        @click="selectOption(option.name)"
+        @click="selectBetOption(option.name)"
       >
         <div class="bet-name">{{ option.name }}</div>
         <div class="bet-odds">赔率 {{ option.odds }}</div>
@@ -31,12 +31,12 @@
       >
         {{ chip }}
       </button>
-      <input type="number" v-model.number="customBet" placeholder="自定义下注" />
+      <input type="number" v-model.number="customBet" placeholder="自定义下注"/>
     </div>
 
     <div class="current-bet">
       当前筹码: {{ selectedChip || customBet }} 当前下注: {{ currentBetOption || '未选择' }}
-      <button @click="placeBet" :disabled="!canBet || !currentBetOption">确认下注</button>
+      <button @click="placeBet" :disabled="!canBet">确认下注</button>
     </div>
 
     <table class="bet-records">
@@ -53,7 +53,7 @@
           <td>{{ record.playerId }}</td>
           <td>{{ record.option }}</td>
           <td>{{ record.amount }}</td>
-          <td :class="{ win: record.result === '赢', lose: record.result === '输' }">{{ record.result || '等待开奖' }}</td>
+          <td :style="{ color: record.result === '输' ? 'red' : 'white' }">{{ record.result || '等待开奖' }}</td>
         </tr>
       </tbody>
     </table>
@@ -65,7 +65,7 @@ import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
 import { io } from 'socket.io-client'
 
-// ---------- 状态 ----------
+// 状态
 const player = reactive({ id: 'player1', name: 'player1', balance: 10000 })
 const game = reactive({ result: '等待开奖', countdown: 20 })
 const options = [
@@ -74,18 +74,73 @@ const options = [
   { name: '庄', odds: 0.95, color: '#b22222' }
 ]
 const chips = [10, 50, 100, 500, 1000]
-const chipColors = { 10: '#ff0000', 50: '#0000ff', 100: '#008000', 500: '#800080', 1000: '#000000' }
+const chipColors = {10:'#ff0000',50:'#0000ff',100:'#008000',500:'#800080',1000:'#000000'}
 const selectedChip = ref(null)
 const customBet = ref(null)
 const currentBetOption = ref(null)
 const betRecords = ref([])
-
 const countdown = ref(20)
 const canBet = ref(true)
-let timer = null
 
-// ---------- Socket.io ----------
+// Socket.io
 let socket
+
+function selectChip(chip) {
+  selectedChip.value = chip
+  customBet.value = null
+}
+function selectBetOption(option) {
+  currentBetOption.value = option
+}
+
+// 请求玩家信息
+async function fetchPlayer() {
+  try {
+    const res = await axios.get(`/api/player/${player.id}`)
+    Object.assign(player, res.data)
+  } catch(e){ console.error(e) }
+}
+
+// 请求游戏状态
+async function fetchGame() {
+  try {
+    const res = await axios.get('/api/game')
+    game.result = res.data.result
+    countdown.value = res.data.time
+  } catch(e){ console.error(e) }
+}
+
+// 倒计时
+function startCountdown() {
+  const timer = setInterval(() => {
+    if (countdown.value > 0) countdown.value--
+    else { clearInterval(timer); canBet.value = false }
+  }, 1000)
+}
+
+// 投注
+async function placeBet() {
+  const amount = customBet.value || selectedChip.value
+  if (!currentBetOption.value || !amount || amount > player.balance) return
+  try {
+    const res = await axios.post('/api/bets', {
+      playerId: player.id,
+      option: currentBetOption.value,
+      amount
+    })
+    if (res.data.success) {
+      player.balance -= amount
+      betRecords.value.push({
+        playerId: player.id,
+        option: currentBetOption.value,
+        amount,
+        result: null
+      })
+    }
+  } catch(e){ console.error(e) }
+}
+
+// Socket.io 同步
 function initSocket() {
   socket = io('/', { path: '/socket.io' })
   socket.on('connect', () => console.log('Socket connected'))
@@ -94,62 +149,6 @@ function initSocket() {
     if (data.game) Object.assign(game, data.game)
     if (data.betRecords) betRecords.value = data.betRecords
   })
-}
-
-// ---------- 功能 ----------
-function selectChip(chip) {
-  selectedChip.value = chip
-  customBet.value = null
-}
-
-function selectOption(optionName) {
-  currentBetOption.value = optionName
-}
-
-async function fetchPlayer() {
-  const res = await axios.get(`/api/player/${player.id}`)
-  Object.assign(player, res.data)
-}
-
-async function fetchGame() {
-  const res = await axios.get('/api/game')
-  game.result = res.data.result
-  countdown.value = res.data.time
-}
-
-function startCountdown() {
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    if (countdown.value > 0) {
-      countdown.value--
-    } else {
-      clearInterval(timer)
-      canBet.value = false
-    }
-  }, 1000)
-}
-
-async function placeBet() {
-  if (!currentBetOption.value) return
-  const amount = customBet.value || selectedChip.value
-  if (amount > player.balance) {
-    alert('余额不足')
-    return
-  }
-  const res = await axios.post('/api/bets', {
-    playerId: player.id,
-    option: currentBetOption.value,
-    amount
-  })
-  if (res.data.success) {
-    player.balance -= amount
-    betRecords.value.push({
-      playerId: player.id,
-      option: currentBetOption.value,
-      amount,
-      result: null
-    })
-  }
 }
 
 onMounted(async () => {
@@ -166,10 +165,8 @@ onMounted(async () => {
 .result-display { font-size: 20px; margin-bottom: 10px; text-align: center; }
 .bet-board { display: flex; justify-content: space-around; border: 3px solid gold; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
 .bet-option { flex: 1; text-align: center; color: white; font-weight: bold; padding: 20px; cursor: pointer; }
-.chips button { margin: 5px; border-radius: 50%; width: 50px; height: 50px; font-weight: bold; }
+.chips button { margin: 5px; border-radius: 50%; width: 50px; height: 50px; font-weight: bold; color: white; border: 2px solid #fff; }
 .current-bet { margin: 10px 0; }
 .bet-records { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .bet-records th, .bet-records td { border: 1px solid #fff; padding: 5px; text-align: center; }
-.bet-records td.win { color: green; }
-.bet-records td.lose { color: red; }
 </style>
