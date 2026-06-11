@@ -1,147 +1,131 @@
 <template>
   <div class="admin-container">
-    <h2>后台管理系统</h2>
+    <h2>后台管理</h2>
 
-    <div class="player-list">
+    <div class="player-section">
       <h3>玩家管理</h3>
       <table>
         <thead>
           <tr>
-            <th>玩家ID</th>
-            <th>玩家名</th>
+            <th>ID</th>
+            <th>姓名</th>
             <th>余额</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="player in players" :key="player.id">
-            <td>{{ player.id }}</td>
-            <td><input v-model="player.name" /></td>
-            <td><input v-model.number="player.balance" type="number" /></td>
-            <td><button @click="updatePlayer(player)">保存</button></td>
+          <tr v-for="p in players" :key="p.id">
+            <td>{{ p.id }}</td>
+            <td><input v-model="p.name" /></td>
+            <td><input v-model.number="p.balance" /></td>
+            <td>
+              <button @click="updatePlayer(p)">保存</button>
+            </td>
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="game-control">
-      <h3>开奖控制</h3>
-      <div>
-        <label>开奖结果:</label>
-        <select v-model="selectedResult">
-          <option>闲</option>
-          <option>和</option>
-          <option>庄</option>
-        </select>
-        <button @click="openResult">开奖</button>
-        <button @click="nextRound">下一轮</button>
+      <div class="add-player">
+        <input v-model="newPlayerId" placeholder="玩家ID" />
+        <input v-model="newPlayerName" placeholder="玩家姓名" />
+        <input v-model.number="newPlayerBalance" placeholder="余额" />
+        <button @click="addPlayer">添加玩家</button>
       </div>
     </div>
 
-    <div class="records">
-      <h3>下注记录</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>玩家ID</th>
-            <th>区域</th>
-            <th>金额</th>
-            <th>结果</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in records" :key="r.id">
-            <td>{{ r.playerId }}</td>
-            <td>{{ r.option }}</td>
-            <td>{{ r.amount }}</td>
-            <td>{{ r.result }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="game-section">
+      <h3>游戏操作</h3>
+      <div class="game-actions">
+        <input v-model="openResult" placeholder="开奖结果" />
+        <button @click="openGame">开奖</button>
+        <button @click="nextRound">下一轮</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import axios from "axios";
-import { io } from "socket.io-client";
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
 
 const players = ref([]);
-const records = ref([]);
-const selectedResult = ref("闲");
+const newPlayerId = ref('');
+const newPlayerName = ref('');
+const newPlayerBalance = ref(0);
 
-let socket;
+const openResult = ref('');
 
 async function fetchPlayers() {
-  const res = await axios.get("/api/players");
+  const res = await axios.get('http://localhost:3000/api/players');
   players.value = res.data;
 }
 
-async function fetchRecords() {
-  const res = await axios.get("/api/records");
-  records.value = res.data;
-}
-
-async function updatePlayer(player) {
-  await axios.post("/admin/update-player", {
-    id: player.id,
-    name: player.name,
-    balance: player.balance
+async function updatePlayer(p) {
+  await axios.post('http://localhost:3000/admin/update-player', {
+    id: p.id,
+    name: p.name,
+    balance: p.balance
   });
+  await fetchPlayers();
 }
 
-async function openResult() {
-  await axios.post("/admin/open", { result: selectedResult.value });
+async function addPlayer() {
+  if (!newPlayerId.value) return;
+  await axios.post('http://localhost:3000/admin/update-player', {
+    id: newPlayerId.value,
+    name: newPlayerName.value,
+    balance: newPlayerBalance.value
+  });
+  newPlayerId.value = '';
+  newPlayerName.value = '';
+  newPlayerBalance.value = 0;
+  await fetchPlayers();
+}
+
+async function openGame() {
+  if (!openResult.value) return;
+  await axios.post('http://localhost:3000/admin/open', {
+    result: openResult.value
+  });
+  openResult.value = '';
 }
 
 async function nextRound() {
-  await axios.post("/admin/next");
-}
-
-function initSocket() {
-  socket = io("/", { path: "/socket.io" });
-  socket.on("connect", () => console.log("Socket connected"));
-  socket.on("update", data => {
-    if (data.players) players.value = data.players;
-    if (data.records) records.value = data.records;
-  });
+  await axios.post('http://localhost:3000/admin/next');
 }
 
 onMounted(() => {
   fetchPlayers();
-  fetchRecords();
-  initSocket();
 });
 </script>
 
 <style scoped>
 .admin-container {
   padding: 20px;
-  background: #0f2d17;
+  background-color: #0f2d17;
   color: #fff;
-  font-family: "Microsoft YaHei";
 }
-
-h2, h3 { color: #ffd700; }
-
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
-table th, table td {
+th, td {
   border: 1px solid #fff;
-  padding: 8px;
+  padding: 5px;
   text-align: center;
 }
-input[type="text"], input[type="number"], select {
+input {
   width: 80px;
-  padding: 5px;
 }
 button {
-  margin-left: 5px;
+  margin: 2px;
   padding: 5px 10px;
-  cursor: pointer;
+}
+.add-player input {
+  margin-right: 5px;
+}
+.game-actions input {
+  width: 120px;
+  margin-right: 5px;
 }
 </style>
