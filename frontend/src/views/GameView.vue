@@ -1,9 +1,9 @@
 <template>
   <div class="game-container">
-    <!-- 上方余额和倒计时 -->
+    <!-- 余额和倒计时 -->
     <div class="balance-timer">
       <span class="balance">💰 当前余额：{{ player.balance }}</span>
-      <span class="countdown">{{ countdown }} 秒</span>
+      <span class="countdown">下注倒计时 {{ countdown }} 秒</span>
     </div>
 
     <!-- 游戏结果显示 -->
@@ -70,10 +70,10 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import axios from 'axios'
 import { io } from 'socket.io-client'
+import axios from 'axios'
 
-const player = reactive({ id: 'player1', balance: 1000 })
+const player = reactive({ id: 'player1', balance: 10000 })
 const game = reactive({ result: '等待开奖' })
 const countdown = ref(20)
 const canBet = ref(true)
@@ -122,9 +122,12 @@ async function placeBet() {
 }
 
 function startCountdown() {
-  setInterval(() => {
+  const interval = setInterval(() => {
     if (countdown.value > 0) countdown.value--
-    else canBet.value = false
+    else {
+      canBet.value = false
+      clearInterval(interval)
+    }
   }, 1000)
 }
 
@@ -166,7 +169,7 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 .balance { color: #FFD700; }
-.countdown { color: #ff0000; }
+.countdown { color: red; }
 .result-display {
   font-size: 22px;
   margin-bottom: 10px;
@@ -175,6 +178,7 @@ onMounted(() => {
 .result-display .waiting { color: yellow; }
 .result-display .win { color: green; }
 .result-display .lose { color: red; }
+
 .bet-board {
   display: flex;
   border: 3px solid gold;
