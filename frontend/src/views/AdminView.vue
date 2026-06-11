@@ -208,7 +208,7 @@ import {ref,onMounted} from "vue"
 
 
 const API =
-"https://demo-game-2.onrender.com"
+"https://demo-game-3.onrender.com"
 
 
 
