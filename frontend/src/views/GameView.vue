@@ -1,32 +1,32 @@
 <template>
   <div class="game-container">
-    <div class="balance">
-      <span>💰 当前余额: {{ player.balance }}</span>
-      <span class="countdown">下注倒计时 {{ countdown }} 秒</span>
+    <div class="balance-timer">
+      <span>💰 当前余额：{{ player.balance }}</span>
+      <span>下注倒计时 {{ countdown }} 秒</span>
     </div>
 
-    <div class="result">
-      开奖结果：<span class="highlight">{{ gameResult.result }}</span>
+    <div class="result-display">
+      开奖结果：{{ game.result }}
     </div>
 
-    <div class="bet-area">
-      <div class="bet-option" v-for="option in options" :key="option.name" :style="{ backgroundColor: option.color }" @click="selectArea(option.name)">
-        <span class="option-name">{{ option.name }}</span>
-        <span class="option-rate">赔率 {{ option.rate }}</span>
+    <div class="bet-board">
+      <div class="bet-option" v-for="option in options" :key="option.name" :style="{ backgroundColor: option.color }">
+        <div class="bet-name">{{ option.name }}</div>
+        <div class="bet-odds">赔率 {{ option.odds }}</div>
       </div>
     </div>
 
     <div class="chips">
-      <button v-for="chip in chips" :key="chip" @click="selectAmount(chip)">{{ chip }}</button>
-      <input type="number" v-model.number="selectedAmount" placeholder="自定义金额" />
+      <button v-for="chip in chips" :key="chip" @click="selectChip(chip)">{{ chip }}</button>
+      <input type="number" v-model.number="customBet" placeholder="自定义下注"/>
     </div>
 
     <div class="current-bet">
-      当前筹码: {{ selectedAmount }} 当前下注: {{ selectedArea || '未选择' }}
-      <button @click="placeBet" :disabled="!selectedAmount || !selectedArea">确认下注</button>
+      当前筹码: {{ selectedChip || customBet }} 当前下注: {{ currentBetOption || '未选择' }}
+      <button @click="placeBet" :disabled="!canBet">确认下注</button>
     </div>
 
-    <table class="bet-record">
+    <table class="bet-records">
       <thead>
         <tr>
           <th>玩家ID</th>
@@ -36,11 +36,11 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="bet in bets" :key="bet._id">
-          <td>{{ bet.playerId }}</td>
-          <td>{{ bet.area }}</td>
-          <td>{{ bet.amount }}</td>
-          <td>{{ bet.result }}</td>
+        <tr v-for="record in betRecords" :key="record.id">
+          <td>{{ record.playerId }}</td>
+          <td>{{ record.option }}</td>
+          <td>{{ record.amount }}</td>
+          <td>{{ record.result || '等待开奖' }}</td>
         </tr>
       </tbody>
     </table>
@@ -48,98 +48,145 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import axios from "axios";
-import { io } from "socket.io-client";
+import { ref, reactive, onMounted } from 'vue'
+import axios from 'axios'
+import { io } from 'socket.io-client'
 
-const playerId = new URLSearchParams(window.location.search).get("player") || "player1";
-const player = ref({ balance: 0 });
-const gameResult = ref({ result: "等待开奖", time: 20 });
-const countdown = ref(20);
-const bets = ref([]);
-const selectedArea = ref("");
-const selectedAmount = ref(100);
-
+// 前端状态
+const player = reactive({ id: '', name: '', balance: 0 })
+const game = reactive({ result: '等待开奖', countdown: 20 })
 const options = [
-  { name: "闲", rate: 1, color: "#1D4E89" },
-  { name: "和", rate: 8, color: "#2E7D32" },
-  { name: "庄", rate: 0.95, color: "#B71C1C" }
-];
-const chips = [10, 50, 100, 500, 1000];
+  { name: '闲', odds: 1, color: '#1c3d91' },
+  { name: '和', odds: 8, color: '#228b22' },
+  { name: '庄', odds: 0.95, color: '#b22222' }
+]
+const chips = [10, 50, 100, 500, 1000]
+const selectedChip = ref(null)
+const customBet = ref(null)
+const currentBetOption = ref(null)
+const betRecords = ref([])
 
-const socket = io(import.meta.env.VITE_BACKEND_URL || "https://demo-game-3.onrender.com");
+const countdown = ref(20)
+const canBet = ref(true)
 
-const fetchPlayer = async () => {
-  const res = await axios.get(`/api/player/${playerId}`);
-  player.value = res.data;
-};
+// Socket.io
+let socket
 
-const fetchGame = async () => {
-  const res = await axios.get(`/api/game`);
-  gameResult.value = res.data;
-  countdown.value = res.data.time;
-};
+function selectChip(chip) {
+  selectedChip.value = chip
+  customBet.value = null
+}
 
-const fetchBets = async () => {
-  const res = await axios.get(`/api/bets/${playerId}`);
-  bets.value = res.data;
-};
+async function fetchPlayer() {
+  const playerId = 'player1' // 可以动态从 query 或后台获取
+  const res = await axios.get(`/api/player/${playerId}`)
+  Object.assign(player, res.data)
+}
 
-const selectArea = (area) => selectedArea.value = area;
-const selectAmount = (amount) => selectedAmount.value = amount;
+async function fetchGame() {
+  const res = await axios.get('/api/game')
+  game.result = res.data.result
+  countdown.value = res.data.time
+}
 
-const placeBet = async () => {
-  if (!selectedArea.value || !selectedAmount.value) return;
-  const res = await axios.post("/api/bet", {
-    playerId,
-    area: selectedArea.value,
-    amount: selectedAmount.value
-  });
+function startCountdown() {
+  const timer = setInterval(() => {
+    if (countdown.value > 0) {
+      countdown.value--
+    } else {
+      clearInterval(timer)
+      canBet.value = false
+    }
+  }, 1000)
+}
+
+async function placeBet() {
+  if (!currentBetOption.value && !selectedChip.value && !customBet.value) return
+  const amount = customBet.value || selectedChip.value
+  const res = await axios.post('/api/bets', {
+    playerId: player.id,
+    option: currentBetOption.value,
+    amount
+  })
   if (res.data.success) {
-    player.value.balance = res.data.balance;
-    fetchBets();
-  } else alert(res.data.message);
-};
+    player.balance -= amount
+    betRecords.value.push({
+      playerId: player.id,
+      option: currentBetOption.value,
+      amount,
+      result: null
+    })
+  }
+}
 
-// --------------------
-// Socket.io 实时更新
-// --------------------
-socket.on("updatePlayer", (p) => {
-  if (p.playerId === playerId) player.value = p;
-});
-socket.on("newBet", (b) => bets.value.unshift(b));
-socket.on("updateBets", (list) => bets.value = list);
-socket.on("gameResult", (result) => {
-  gameResult.value = result;
-  countdown.value = result.time;
-});
+// Socket.io 监听
+function initSocket() {
+  socket = io('/', { path: '/socket.io' })
+  socket.on('connect', () => console.log('Socket connected'))
+  socket.on('update', (data) => {
+    // 前端同步更新
+    if (data.player) Object.assign(player, data.player)
+    if (data.game) Object.assign(game, data.game)
+    if (data.betRecords) betRecords.value = data.betRecords
+  })
+}
 
-// --------------------
-// 倒计时处理
-// --------------------
-onMounted(() => {
-  fetchPlayer();
-  fetchGame();
-  fetchBets();
-
-  setInterval(() => {
-    if (countdown.value > 0) countdown.value -= 1;
-  }, 1000);
-});
+onMounted(async () => {
+  await fetchPlayer()
+  await fetchGame()
+  initSocket()
+  startCountdown()
+})
 </script>
 
 <style scoped>
-.game-container { max-width: 600px; margin: auto; color: #fff; background-color: #123; padding: 20px; border-radius: 10px; }
-.balance { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 16px; }
-.result { text-align: center; margin: 15px 0; font-size: 20px; }
-.highlight { color: yellow; font-weight: bold; }
-.bet-area { display: flex; justify-content: space-between; margin-bottom: 15px; border: 2px solid gold; border-radius: 10px; overflow: hidden; }
-.bet-option { flex: 1; padding: 30px 0; cursor: pointer; text-align: center; }
-.option-name { display: block; font-size: 24px; font-weight: bold; }
-.option-rate { display: block; font-size: 14px; margin-top: 10px; }
-.chips { margin-bottom: 15px; }
-.chips button { margin-right: 5px; width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer; }
-.current-bet { margin-bottom: 15px; }
-.bet-record { width: 100%; border-collapse: collapse; }
-.bet-record th, .bet-record td { border: 1px solid #fff; padding: 5px; text-align: center; }
+.game-container {
+  padding: 20px;
+  color: #fff;
+  background-color: #0f2d17;
+}
+.balance-timer {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.result-display {
+  font-size: 20px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.bet-board {
+  display: flex;
+  justify-content: space-around;
+  border: 3px solid gold;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.bet-option {
+  flex: 1;
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  padding: 20px;
+}
+.chips button {
+  margin: 5px;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-weight: bold;
+}
+.current-bet {
+  margin: 10px 0;
+}
+.bet-records {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bet-records th, .bet-records td {
+  border: 1px solid #fff;
+  padding: 5px;
+  text-align: center;
+}
 </style>
