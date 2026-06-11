@@ -14,9 +14,9 @@
     <!-- 投注区域 -->
     <div class="bet-board">
       <div
-        class="bet-option"
         v-for="option in options"
         :key="option.name"
+        class="bet-option"
         :style="{ backgroundColor: option.color }"
         @click="choose(option.name)"
       >
@@ -46,7 +46,7 @@
       </button>
     </div>
 
-    <!-- 投注记录表格 -->
+    <!-- 投注记录 -->
     <table class="bet-records">
       <thead>
         <tr>
@@ -69,9 +69,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { io } from 'socket.io-client'
-import axios from 'axios'
+import { reactive, ref, onMounted } from 'vue'
 
 const player = reactive({ id: 'player1', balance: 1000 })
 const game = reactive({ result: '等待开奖' })
@@ -83,6 +81,7 @@ const options = [
   { name: '和', color: '#14853d', odds: 8 },
   { name: '庄', color: '#b31319', odds: 0.95 }
 ]
+
 const chips = [
   { value: 10, color: 'red' },
   { value: 50, color: 'blue' },
@@ -90,6 +89,7 @@ const chips = [
   { value: 500, color: 'purple' },
   { value: 1000, color: 'black' }
 ]
+
 const selectedChip = ref(0)
 const customBet = ref(0)
 const currentOption = ref('')
@@ -113,7 +113,7 @@ function placeBet() {
   // 更新余额
   player.balance -= amount
 
-  // 更新下注记录
+  // 添加下注记录
   records.value.push({
     id: Date.now(),
     playerId: player.id,
@@ -139,7 +139,6 @@ function startCountdown() {
   }, 1000)
 }
 
-// 样式 class
 function resultClass() {
   if (game.result === '等待开奖') return 'waiting'
   return game.result === '庄' || game.result === '闲' ? 'win' : 'lose'
@@ -151,18 +150,8 @@ function recordClass(result) {
   return 'win'
 }
 
-function initSocket() {
-  const socket = io('/', { path: '/socket.io' })
-  socket.on('update', data => {
-    if (data.player) Object.assign(player, data.player)
-    if (data.game) Object.assign(game, data.game)
-    if (data.bets) records.value = data.bets
-  })
-}
-
 onMounted(() => {
   startCountdown()
-  initSocket()
 })
 </script>
 
