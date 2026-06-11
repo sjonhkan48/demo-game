@@ -9,13 +9,12 @@ const Player = require("./models/player");
 const Bet = require("./models/Bet");
 
 const app = express();
-app.use(cors({ origin: "*" }));
-app.use(express.json());
-
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
+
+// 允许跨域
+app.use(cors());
+app.use(express.json());
 
 // ----------------------
 // MongoDB 连接
@@ -24,33 +23,27 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log("MongoDB Error:", err));
 
-let currentResult = "等待开奖";
-
 // ----------------------
-// WebSocket 连接
+// 首页测试
 // ----------------------
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
-
-  // 给新连接的客户端推送当前状态
-  sendGameState(socket);
-
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
-  });
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "backend running" });
 });
 
-async function sendGameState(socket) {
-  const bets = await Bet.find().sort({ createdAt: -1 });
-  const players = await Player.find();
-  const data = {
-    result: currentResult,
-    bets,
-    players,
-  };
-  if (socket) socket.emit("gameState", data);
-  else io.emit("gameState", data);
-}
+// ----------------------
+// 获取玩家余额
+// ----------------------
+app.get("/api/score/:id", async (req, res) => {
+  let player = await Player.findOne({ playerId: req.params.id });
+  if (!player) {
+    player = await Player.create({
+      playerId: req.params.id,
+      name: "玩家",
+      score: 10000,
+    });
+  }
+  res.json(player);
+});
 
 // ----------------------
 // 玩家下注
@@ -58,15 +51,27 @@ async function sendGameState(socket) {
 app.post("/api/bet", async (req, res) => {
   try {
     const { playerId, area, amount } = req.body;
+    if (!playerId || !area || !amount)
+      return res.json({ success: false, message: "下注数据错误" });
+
     const player = await Player.findOne({ playerId });
-    if (!player || player.score < amount) return res.json({ success: false });
+    if (!player) return res.json({ success: false, message: "玩家不存在" });
+
+    if (player.score < amount) return res.json({ success: false, message: "余额不足" });
 
     player.score -= Number(amount);
     await player.save();
 
-    const bet = await Bet.create({ playerId, area, amount, result: "pending", settled: false });
+    const bet = await Bet.create({
+      playerId,
+      area,
+      amount: Number(amount),
+      result: "pending",
+      settled: false,
+    });
 
-    sendGameState(); // 推送更新到所有客户端
+    io.emit("gameUpdate"); // 推送前端
+
     res.json({ success: true, score: player.score, bet });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -74,50 +79,102 @@ app.post("/api/bet", async (req, res) => {
 });
 
 // ----------------------
-// 后台开奖
+// 玩家投注记录
 // ----------------------
-app.post("/admin/open", async (req, res) => {
-  try {
-    const { result } = req.body;
-    currentResult = result;
-
-    const bets = await Bet.find({ settled: false });
-
-    for (const bet of bets) {
-      let win = bet.area === result;
-      bet.result = win ? "win" : "lose";
-      bet.settled = true;
-      await bet.save();
-
-      if (win) {
-        const player = await Player.findOne({ playerId: bet.playerId });
-        if (player) {
-          let multiple = result === "和" ? 8 : result === "庄" ? 0.95 : 1;
-          player.score += Math.floor(bet.amount * multiple);
-          await player.save();
-        }
-      }
-    }
-
-    sendGameState(); // 实时推送
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.get("/api/bets/:playerId", async (req, res) => {
+  const list = await Bet.find({ playerId: req.params.playerId }).sort({ createdAt: -1 });
+  res.json(list);
 });
 
 // ----------------------
-// 后台下一轮
+// 游戏状态
 // ----------------------
+let currentResult = "等待开奖";
+
+app.get("/api/result", (req, res) => {
+  res.json({ result: currentResult });
+});
+
+// =====================
+// 后台接口
+// =====================
+
+// 获取所有玩家
+app.get("/admin/players", async (req, res) => {
+  const players = await Player.find();
+  res.json(players);
+});
+
+// 新增玩家
+app.post("/admin/player/add", async (req, res) => {
+  const { playerId, name, score } = req.body;
+  const exist = await Player.findOne({ playerId });
+  if (exist) return res.json({ success: false, message: "玩家已存在" });
+
+  const player = await Player.create({ playerId, name: name || "玩家", score: Number(score) || 10000 });
+  io.emit("playersUpdate"); // 推送前端更新
+  res.json({ success: true, player });
+});
+
+// 修改玩家积分
+app.post("/admin/player/update", async (req, res) => {
+  const { playerId, score, name } = req.body;
+  const player = await Player.findOne({ playerId });
+  if (!player) return res.json({ success: false, message: "玩家不存在" });
+
+  player.score = Number(score);
+  if (name) player.name = name;
+  await player.save();
+  io.emit("playersUpdate"); // 推送前端
+  res.json({ success: true, player });
+});
+
+// 开奖
+app.post("/admin/open", async (req, res) => {
+  const { result } = req.body;
+  currentResult = result;
+
+  const bets = await Bet.find({ settled: false });
+  for (const bet of bets) {
+    const win = bet.area === result;
+    bet.result = win ? "win" : "lose";
+    bet.settled = true;
+    await bet.save();
+
+    if (win) {
+      const player = await Player.findOne({ playerId: bet.playerId });
+      if (player) {
+        let rate = 1;
+        if (result === "和") rate = 8;
+        if (result === "庄") rate = 0.95;
+
+        player.score += Math.floor(bet.amount * rate);
+        await player.save();
+      }
+    }
+  }
+
+  io.emit("gameUpdate"); // 前端同步
+  res.json({ success: true });
+});
+
+// 下一轮
 app.post("/admin/next", async (req, res) => {
   currentResult = "等待开奖";
   await Bet.updateMany({}, { settled: false, result: "pending" });
-  sendGameState();
+  io.emit("gameUpdate"); // 前端同步
   res.json({ success: true });
+});
+
+// ----------------------
+// WebSocket
+// ----------------------
+io.on("connection", socket => {
+  console.log("客户端已连接");
 });
 
 // ----------------------
 // 启动服务
 // ----------------------
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running at port ${PORT}`));
