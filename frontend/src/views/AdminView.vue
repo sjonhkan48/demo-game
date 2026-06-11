@@ -1,104 +1,509 @@
 <template>
-  <div class="admin-view">
-    <h2>后台管理系统</h2>
+<div class="admin">
 
-    <section>
-      <h3>游戏控制</h3>
-      <div>当前状态：{{ currentResult === "等待开奖" ? "等待开奖" : "开奖完成" }}</div>
-      <div>开奖结果：{{ currentResult }}</div>
-      <select v-model="selectedResult">
-        <option value="闲">闲</option>
-        <option value="和">和</option>
-        <option value="庄">庄</option>
-      </select>
-      <button @click="openGame">立即开奖</button>
-      <button @click="nextRound">下一轮</button>
-    </section>
+<h1>后台管理系统</h1>
 
-    <section>
-      <h3>玩家管理</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>名称</th>
-            <th>余额</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in players" :key="p.playerId">
-            <td>{{ p.playerId }}</td>
-            <td><input v-model="p.name" /></td>
-            <td><input type="number" v-model.number="p.score" /></td>
-            <td>
-              <button @click="updatePlayer(p)">保存</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div>
-        <h4>新增玩家</h4>
-        <input placeholder="玩家ID" v-model="newPlayerId" />
-        <input placeholder="名称" v-model="newPlayerName" />
-        <input type="number" placeholder="积分" v-model.number="newPlayerScore" />
-        <button @click="addPlayer">新增玩家</button>
-      </div>
-    </section>
-  </div>
+
+<div class="box">
+
+<h2>游戏控制</h2>
+
+<p>
+当前状态：
+{{ gameStatus }}
+</p>
+
+
+<p>
+开奖结果：
+{{ result }}
+</p>
+
+
+<select v-model="openResult">
+
+<option value="闲">闲</option>
+<option value="和">和</option>
+<option value="庄">庄</option>
+
+</select>
+
+
+<button @click="openGame">
+立即开奖
+</button>
+
+
+<button @click="nextRound">
+下一轮
+</button>
+
+
+</div>
+
+
+
+<div class="box">
+
+<button @click="loadPlayers">
+刷新玩家
+</button>
+
+
+</div>
+
+
+
+<h2>玩家管理</h2>
+
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>ID</th>
+<th>名称</th>
+<th>余额</th>
+<th>操作</th>
+
+
+</tr>
+
+
+</thead>
+
+
+<tbody>
+
+
+<tr v-for="p in players" :key="p.playerId">
+
+
+<td>
+{{p.playerId}}
+</td>
+
+
+<td>
+
+<input v-model="p.name">
+
+</td>
+
+
+<td>
+
+<input 
+type="number"
+v-model.number="p.score"
+>
+
+</td>
+
+
+<td>
+
+<button @click="savePlayer(p)">
+保存
+</button>
+
+
+<a 
+:href="playerLink(p.playerId)"
+target="_blank"
+>
+玩家链接
+</a>
+
+
+</td>
+
+
+</tr>
+
+
+</tbody>
+
+</table>
+
+
+
+
+
+<h2>开奖记录</h2>
+
+
+<table>
+
+
+<thead>
+
+<tr>
+
+<th>玩家</th>
+<th>下注</th>
+<th>金额</th>
+<th>结果</th>
+
+
+</tr>
+
+</thead>
+
+
+<tbody>
+
+
+<tr v-for="b in records" :key="b._id">
+
+
+<td>
+{{b.playerId}}
+</td>
+
+
+<td>
+{{b.area}}
+</td>
+
+
+<td>
+{{b.amount}}
+</td>
+
+
+<td>
+
+{{showResult(b.result)}}
+
+</td>
+
+
+</tr>
+
+
+
+</tbody>
+
+
+
+</table>
+
+
+
+</div>
+
+
 </template>
 
+
+
 <script setup>
-import { ref, onMounted } from "vue";
-import { getPlayers, addPlayerAPI, updatePlayerAPI, adminOpenAPI, adminNextAPI } from "../services/api";
 
-const players = ref([]);
-const newPlayerId = ref("");
-const newPlayerName = ref("");
-const newPlayerScore = ref(10000);
-const selectedResult = ref("闲");
-const currentResult = ref("等待开奖");
 
-async function loadPlayers() {
-  const res = await getPlayers();
-  players.value = res;
+import {ref,onMounted} from "vue"
+
+
+
+const API =
+"https://demo-game-2.onrender.com"
+
+
+
+const players=ref([])
+
+const records=ref([])
+
+
+const result=ref("")
+
+const gameStatus=ref("等待开奖")
+
+
+const openResult=ref("庄")
+
+
+
+
+
+async function request(url,options={}){
+
+
+const res =
+await fetch(API+url,{
+
+headers:{
+"Content-Type":"application/json"
+},
+
+...options
+
+})
+
+
+return await res.json()
+
+
 }
 
-async function addPlayer() {
-  if (!newPlayerId.value) return alert("请输入玩家ID");
-  await addPlayerAPI({ playerId: newPlayerId.value, name: newPlayerName.value, score: newPlayerScore.value });
-  newPlayerId.value = "";
-  newPlayerName.value = "";
-  newPlayerScore.value = 10000;
-  await loadPlayers();
+
+
+
+
+
+async function loadPlayers(){
+
+
+players.value =
+await request("/api/players")
+
+
 }
 
-async function updatePlayer(p) {
-  await updatePlayerAPI({ playerId: p.playerId, name: p.name, score: p.score });
-  await loadPlayers();
+
+
+
+
+
+async function loadRecords(){
+
+
+records.value =
+await request("/api/records")
+
+
 }
 
-async function openGame() {
-  await adminOpenAPI(selectedResult.value);
-  currentResult.value = selectedResult.value;
+
+
+
+
+
+async function openGame(){
+
+
+
+const data =
+await request(
+"/admin/open",
+{
+
+method:"POST",
+
+body:JSON.stringify({
+
+result:openResult.value
+
+})
+
+
+})
+
+
+
+if(data.success){
+
+result.value=data.result
+
+gameStatus.value="开奖完成"
+
 }
 
-async function nextRound() {
-  await adminNextAPI();
-  currentResult.value = "等待开奖";
-  await loadPlayers();
+
+
 }
 
-onMounted(() => {
-  loadPlayers();
-});
+
+
+
+
+
+async function nextRound(){
+
+
+
+const data =
+await request(
+"/admin/next",
+{
+
+method:"POST"
+
+}
+
+)
+
+
+
+if(data.success){
+
+gameStatus.value="等待开奖"
+
+result.value="等待开奖"
+
+}
+
+
+}
+
+
+
+
+
+
+async function savePlayer(p){
+
+
+await request(
+"/admin/player/update",
+{
+
+method:"POST",
+
+body:JSON.stringify({
+
+playerId:p.playerId,
+
+name:p.name,
+
+score:p.score
+
+
+})
+
+}
+
+)
+
+
+
+alert("保存成功")
+
+
+}
+
+
+
+
+
+
+
+function playerLink(id){
+
+
+return window.location.origin+
+"/?player="+id
+
+
+}
+
+
+
+
+function showResult(r){
+
+
+if(r==="win") return "赢"
+
+if(r==="lose") return "输"
+
+
+return "等待开奖"
+
+
+}
+
+
+
+
+
+onMounted(()=>{
+
+
+loadPlayers()
+
+loadRecords()
+
+
+setInterval(()=>{
+
+
+loadPlayers()
+
+loadRecords()
+
+
+},3000)
+
+
+
+})
+
+
+
 </script>
 
+
+
 <style scoped>
-.admin-view { padding: 20px; font-family: "Microsoft YaHei"; }
-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-td, th { border: 1px solid #ccc; padding: 8px; text-align: center; }
-input { width: 100px; }
-button { margin: 5px; padding: 5px 10px; }
-section { margin-bottom: 25px; }
+
+
+.admin{
+
+padding:20px;
+
+font-family:"Microsoft YaHei";
+
+}
+
+
+.box{
+
+background:#eee;
+
+padding:25px;
+
+margin-bottom:20px;
+
+}
+
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+}
+
+
+td,th{
+
+border:1px solid #aaa;
+
+padding:10px;
+
+text-align:center;
+
+}
+
+
+button{
+
+padding:8px 15px;
+
+margin:5px;
+
+}
+
+
+input{
+
+width:160px;
+
+}
+
+
 </style>
