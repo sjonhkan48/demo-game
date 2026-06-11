@@ -1,335 +1,268 @@
 <template>
-  <div class="admin">
 
-    <h1>后台管理系统</h1>
+<div class="admin">
 
+<h1>后台管理系统</h1>
 
-    <div class="panel">
 
-      <h2>游戏控制</h2>
+<div class="panel">
 
-      <p>
-        当前状态：
-        <span>
-          {{ status }}
-        </span>
-      </p>
+<h2>游戏控制</h2>
 
+<p>
+当前状态：
+{{ gameStatus }}
+</p>
 
-      <p>
-        开奖结果：
-        {{ result }}
-      </p>
 
+<p>
+开奖结果：
+<b>{{ result }}</b>
+</p>
 
-      <select v-model="openResult">
-        <option value="闲">闲</option>
-        <option value="和">和</option>
-        <option value="庄">庄</option>
-      </select>
 
+<select v-model="selectResult">
 
-      <button @click="openGame">
-        立即开奖
-      </button>
+<option value="闲">闲</option>
+<option value="和">和</option>
+<option value="庄">庄</option>
 
+</select>
 
-      <button @click="nextRound">
-        下一轮
-      </button>
 
+<button @click="openGame">
+立即开奖
+</button>
 
-    </div>
 
+<button @click="nextRound">
+下一轮
+</button>
 
 
-    <div class="panel">
+</div>
 
-      <button @click="createInvite">
-        生成玩家邀请链接
-      </button>
 
 
-      <p v-if="invite">
-        {{ invite }}
-      </p>
+<div class="panel">
 
-    </div>
+<button @click="createInvite">
+生成玩家邀请链接
+</button>
 
 
+<p>
+{{ invite }}
+</p>
 
-    <h2>玩家管理</h2>
 
+</div>
 
-    <table>
 
-      <thead>
 
-        <tr>
+<h2>玩家管理</h2>
 
-          <th>ID</th>
 
-          <th>名称</th>
+<table>
 
-          <th>余额</th>
+<tr>
 
-          <th>操作</th>
+<th>ID</th>
+<th>名称</th>
+<th>余额</th>
+<th>操作</th>
 
-        </tr>
 
-      </thead>
+</tr>
 
 
+<tr v-for="p in players" :key="p.playerId">
 
-      <tbody>
 
+<td>
+{{p.playerId}}
+</td>
 
-        <tr
-          v-for="p in players"
-          :key="p.playerId"
-        >
 
+<td>
 
-          <td>
-            {{p.playerId}}
-          </td>
+<input v-model="p.name">
 
+</td>
 
-          <td>
 
-            <input
-              v-model="p.name"
-            >
 
-          </td>
+<td>
 
+<input 
+type="number"
+v-model.number="p.score"
+>
 
 
-          <td>
+</td>
 
-            <input
-              type="number"
-              v-model.number="p.score"
-            >
 
-          </td>
 
+<td>
 
 
-          <td>
+<button @click="savePlayer(p)">
+保存
+</button>
 
-            <button
-              @click="savePlayer(p)"
-            >
-              保存
-            </button>
 
 
-            <button
-              @click="copyLink(p.playerId)"
-            >
-              玩家链接
-            </button>
+<a
+:href="'/?player='+p.playerId"
+target="_blank"
+>
 
+玩家链接
 
-          </td>
+</a>
 
 
+</td>
 
-        </tr>
 
 
-      </tbody>
+</tr>
 
 
-    </table>
+</table>
 
 
 
 
-    <h2>
-      开奖记录
-    </h2>
 
+<h2>开奖记录</h2>
 
-    <table>
 
+<table>
 
-      <thead>
+<tr>
 
-        <tr>
+<th>
+玩家
+</th>
 
-          <th>
-            玩家
-          </th>
+<th>
+下注
+</th>
 
+<th>
+金额
+</th>
 
-          <th>
-            下注
-          </th>
+<th>
+结果
+</th>
 
 
-          <th>
-            金额
-          </th>
+</tr>
 
 
-          <th>
-            结果
-          </th>
 
+<tr
+v-for="b in records"
+:key="b._id"
+>
 
-        </tr>
 
-      </thead>
+<td>
+{{b.playerId}}
+</td>
 
 
+<td>
+{{b.area}}
+</td>
 
-      <tbody>
 
+<td>
+{{b.amount}}
+</td>
 
-        <tr
-          v-for="b in records"
-          :key="b._id"
-        >
 
-          <td>
-            {{b.playerId}}
-          </td>
+<td>
 
+{{b.result}}
 
-          <td>
-            {{b.area}}
-          </td>
+</td>
 
 
-          <td>
-            {{b.amount}}
-          </td>
+</tr>
 
 
-          <td>
-            {{b.result}}
-          </td>
 
+</table>
 
-        </tr>
 
 
-      </tbody>
+</div>
 
-
-    </table>
-
-
-  </div>
 </template>
-
 
 
 
 <script setup>
 
-import {
-  ref,
-  onMounted
-} from "vue";
 
+import {ref,onMounted} from "vue";
 
 import axios from "axios";
 
 
-const api =
-"https://demo-game-2.onrender.com";
+const API="你的后台地址";
 
 
+const players=ref([]);
 
-const players = ref([]);
 
-const records = ref([]);
+const records=ref([]);
 
-const result = ref("");
 
-const status = ref("等待开奖");
+const selectResult=ref("庄");
 
-const openResult = ref("庄");
 
-const invite = ref("");
+const result=ref("");
 
+const gameStatus=ref("等待开奖");
+
+
+const invite=ref("");
 
 
 
 async function load(){
 
 
-  const p =
-  await axios.get(
-    api+"/admin/players"
-  );
+let p=await axios.get(
+`${API}/admin/players`
+);
 
 
-  players.value =
-  p.data;
-
-
-
-  const r =
-  await axios.get(
-    api+"/admin/records"
-  );
-
-
-  records.value =
-  r.data;
-
-
-}
+players.value=p.data;
 
 
 
-
-async function openGame(){
-
-
-  await axios.post(
-    api+"/admin/open",
-    {
-      result:
-      openResult.value
-    }
-  );
+let r=await axios.get(
+`${API}/admin/records`
+);
 
 
-  result.value =
-  openResult.value;
-
-
-  status.value =
-  "开奖完成";
-
-
-  load();
-
-
-}
+records.value=r.data;
 
 
 
-
-async function nextRound(){
-
-
-  await axios.post(
-    api+"/admin/next"
-  );
+let g=await axios.get(
+`${API}/api/result`
+);
 
 
-  status.value =
-  "开始下一轮";
+result.value=g.data.result;
 
-
-  result.value =
-  "";
 
 
 }
@@ -341,16 +274,77 @@ async function nextRound(){
 async function savePlayer(p){
 
 
- await axios.post(
-   api+"/admin/player/update",
-   p
- );
+await axios.post(
+`${API}/admin/player/update`,
+{
+
+playerId:p.playerId,
+
+name:p.name,
+
+score:p.score
+
+}
+
+);
 
 
- alert("保存成功");
+alert("保存成功");
 
 
 }
+
+
+
+
+async function openGame(){
+
+
+
+await axios.post(
+`${API}/admin/open`,
+{
+
+result:selectResult.value
+
+}
+
+);
+
+
+gameStatus.value="开奖完成";
+
+
+load();
+
+
+}
+
+
+
+
+
+async function nextRound(){
+
+
+
+await axios.post(
+`${API}/admin/next`
+);
+
+
+gameStatus.value="下注中";
+
+
+result.value="等待开奖";
+
+
+load();
+
+
+
+}
+
 
 
 
@@ -358,53 +352,33 @@ async function savePlayer(p){
 async function createInvite(){
 
 
- const r =
- await axios.get(
-   api+"/admin/invite"
- );
+
+let res=await axios.get(
+`${API}/admin/invite`
+);
 
 
- invite.value =
- r.data.url;
-
-
-}
-
-
-
-
-
-function copyLink(id){
-
-
- navigator.clipboard.writeText(
-   api+"/?player="+id
- );
-
-
- alert("复制成功");
+invite.value=res.data.url;
 
 
 }
-
-
 
 
 
 onMounted(()=>{
 
 
- load();
+load();
 
 
- setInterval(load,3000);
+setInterval(load,3000);
 
 
 })
 
 
-</script>
 
+</script>
 
 
 
@@ -423,14 +397,24 @@ font-family:"Microsoft YaHei";
 
 .panel{
 
+
 background:#eee;
 
 padding:20px;
 
 margin-bottom:20px;
 
+
 }
 
+
+button{
+
+margin:5px;
+
+padding:8px 15px;
+
+}
 
 
 table{
@@ -445,21 +429,11 @@ border-collapse:collapse;
 
 td,th{
 
-border:1px solid #ccc;
+border:1px solid #aaa;
 
 padding:10px;
 
 text-align:center;
-
-}
-
-
-
-button{
-
-padding:8px 15px;
-
-margin:5px;
 
 }
 
