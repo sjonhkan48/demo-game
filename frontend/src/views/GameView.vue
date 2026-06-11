@@ -1,172 +1,610 @@
 <template>
-  <div class="game-container">
-    <div class="balance-timer">
-      <span>💰 当前余额：{{ player.balance }}</span>
-      <span>下注倒计时 {{ countdown }} 秒</span>
-    </div>
 
-    <div class="result-display">
-      开奖结果：{{ game.result }}
-    </div>
+<div class="game-container">
 
-    <div class="bet-board">
-      <div
-        class="bet-option"
-        v-for="option in options"
-        :key="option.name"
-        :style="{ backgroundColor: option.color }"
-        @click="selectBetOption(option.name)"
-      >
-        <div class="bet-name">{{ option.name }}</div>
-        <div class="bet-odds">赔率 {{ option.odds }}</div>
-      </div>
-    </div>
 
-    <div class="chips">
-      <button
-        v-for="chip in chips"
-        :key="chip"
-        :style="{ backgroundColor: chipColors[chip] }"
-        @click="selectChip(chip)"
-      >
-        {{ chip }}
-      </button>
-      <input type="number" v-model.number="customBet" placeholder="自定义下注"/>
-    </div>
+<div class="top">
 
-    <div class="current-bet">
-      当前筹码: {{ selectedChip || customBet }} 当前下注: {{ currentBetOption || '未选择' }}
-      <button @click="placeBet" :disabled="!canBet">确认下注</button>
-    </div>
+<div>
+💰 当前余额：{{player.balance}}
+</div>
 
-    <table class="bet-records">
-      <thead>
-        <tr>
-          <th>玩家ID</th>
-          <th>区域</th>
-          <th>金额</th>
-          <th>结果</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="record in betRecords" :key="record.id">
-          <td>{{ record.playerId }}</td>
-          <td>{{ record.option }}</td>
-          <td>{{ record.amount }}</td>
-          <td :style="{ color: record.result === '输' ? 'red' : 'white' }">{{ record.result || '等待开奖' }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+
+<div class="timer">
+下注倒计时 {{countdown}} 秒
+</div>
+
+
+</div>
+
+
+
+<div class="result">
+
+开奖结果：
+<span>
+{{game.result}}
+</span>
+
+</div>
+
+
+
+
+<div class="board">
+
+
+<div
+v-for="item in options"
+:key="item.name"
+class="area"
+@click="selectArea(item.name)"
+:style="{background:item.color}"
+>
+
+
+<h1>
+{{item.name}}
+</h1>
+
+赔率 {{item.odds}}
+
+</div>
+
+
+</div>
+
+
+
+
+
+
+<div class="chips">
+
+
+<button
+v-for="c in chips"
+:key="c"
+:class="'chip c'+c"
+@click="selectChip(c)"
+>
+
+{{c}}
+
+</button>
+
+
+<input
+v-model.number="customBet"
+placeholder="自定义下注"
+/>
+
+
+</div>
+
+
+
+
+
+<div class="info">
+
+
+当前筹码：
+{{amount}}
+
+
+<br>
+
+
+当前下注：
+{{currentArea || '未选择'}}
+
+
+
+<button
+@click="bet"
+:disabled="!canBet"
+>
+
+确认下注
+
+</button>
+
+
+</div>
+
+
+
+
+
+<h3>
+投注记录
+</h3>
+
+
+<table>
+
+
+<tr>
+
+<th>玩家ID</th>
+
+<th>区域</th>
+
+<th>金额</th>
+
+<th>结果</th>
+
+</tr>
+
+
+
+<tr
+v-for="b in records"
+:key="b.id"
+>
+
+
+<td>{{b.playerId}}</td>
+
+<td>{{b.option}}</td>
+
+<td>{{b.amount}}</td>
+
+<td>
+{{b.result}}
+</td>
+
+
+</tr>
+
+
+
+</table>
+
+
+
+</div>
+
+
 </template>
 
+
+
+
+
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import axios from 'axios'
-import { io } from 'socket.io-client'
 
-// 状态
-const player = reactive({ id: 'player1', name: 'player1', balance: 10000 })
-const game = reactive({ result: '等待开奖', countdown: 20 })
-const options = [
-  { name: '闲', odds: 1, color: '#1c3d91' },
-  { name: '和', odds: 8, color: '#228b22' },
-  { name: '庄', odds: 0.95, color: '#b22222' }
-]
-const chips = [10, 50, 100, 500, 1000]
-const chipColors = {10:'#ff0000',50:'#0000ff',100:'#008000',500:'#800080',1000:'#000000'}
-const selectedChip = ref(null)
-const customBet = ref(null)
-const currentBetOption = ref(null)
-const betRecords = ref([])
-const countdown = ref(20)
-const canBet = ref(true)
 
-// Socket.io
-let socket
+import {
+ref,
+reactive,
+computed,
+onMounted
+} from "vue"
 
-function selectChip(chip) {
-  selectedChip.value = chip
-  customBet.value = null
-}
-function selectBetOption(option) {
-  currentBetOption.value = option
-}
 
-// 请求玩家信息
-async function fetchPlayer() {
-  try {
-    const res = await axios.get(`/api/player/${player.id}`)
-    Object.assign(player, res.data)
-  } catch(e){ console.error(e) }
-}
+import axios from "axios"
 
-// 请求游戏状态
-async function fetchGame() {
-  try {
-    const res = await axios.get('/api/game')
-    game.result = res.data.result
-    countdown.value = res.data.time
-  } catch(e){ console.error(e) }
-}
 
-// 倒计时
-function startCountdown() {
-  const timer = setInterval(() => {
-    if (countdown.value > 0) countdown.value--
-    else { clearInterval(timer); canBet.value = false }
-  }, 1000)
-}
 
-// 投注
-async function placeBet() {
-  const amount = customBet.value || selectedChip.value
-  if (!currentBetOption.value || !amount || amount > player.balance) return
-  try {
-    const res = await axios.post('/api/bets', {
-      playerId: player.id,
-      option: currentBetOption.value,
-      amount
-    })
-    if (res.data.success) {
-      player.balance -= amount
-      betRecords.value.push({
-        playerId: player.id,
-        option: currentBetOption.value,
-        amount,
-        result: null
-      })
-    }
-  } catch(e){ console.error(e) }
-}
+const player=reactive({
 
-// Socket.io 同步
-function initSocket() {
-  socket = io('/', { path: '/socket.io' })
-  socket.on('connect', () => console.log('Socket connected'))
-  socket.on('update', (data) => {
-    if (data.player) Object.assign(player, data.player)
-    if (data.game) Object.assign(game, data.game)
-    if (data.betRecords) betRecords.value = data.betRecords
-  })
-}
+id:"player1",
 
-onMounted(async () => {
-  await fetchPlayer()
-  await fetchGame()
-  initSocket()
-  startCountdown()
+balance:10000
+
 })
+
+
+
+const game=reactive({
+
+result:"等待开奖"
+
+})
+
+
+
+
+const countdown=ref(20)
+
+
+const canBet=ref(true)
+
+
+
+const options=[
+
+
+{
+name:"闲",
+odds:1,
+color:"#2049a0"
+},
+
+
+{
+name:"和",
+odds:8,
+color:"#178c43"
+},
+
+
+{
+name:"庄",
+odds:0.95,
+color:"#b51616"
+}
+
+
+
+]
+
+
+
+const chips=[10,50,100,500,1000]
+
+
+
+const selected=ref(0)
+
+
+const customBet=ref(null)
+
+
+const currentArea=ref(null)
+
+
+
+const records=ref([])
+
+
+
+const amount=computed(()=>{
+
+
+return customBet.value || selected.value
+
+
+})
+
+
+
+
+
+function selectChip(c){
+
+selected.value=c
+
+customBet.value=null
+
+}
+
+
+
+function selectArea(a){
+
+currentArea.value=a
+
+}
+
+
+
+
+
+
+
+async function load(){
+
+
+let p=
+await axios.get(
+"/api/player/player1"
+)
+
+
+Object.assign(
+player,
+p.data
+)
+
+
+
+let g=
+await axios.get(
+"/api/game"
+)
+
+
+game.result=g.data.result
+
+
+countdown.value=g.data.time
+
+
+
+}
+
+
+
+
+async function bet(){
+
+
+
+if(!currentArea.value){
+
+alert("请选择下注区域")
+
+return
+
+}
+
+
+
+if(amount.value<=0){
+
+return
+
+}
+
+
+
+if(amount.value>player.balance){
+
+alert("余额不足")
+
+return
+
+}
+
+
+
+
+
+let res =
+await axios.post(
+"/api/bets",
+{
+
+
+playerId:player.id,
+
+
+option:currentArea.value,
+
+
+amount:amount.value
+
+
+}
+
+)
+
+
+
+if(res.data.success){
+
+
+player.balance-=amount.value
+
+
+
+records.value.push({
+
+playerId:player.id,
+
+option:currentArea.value,
+
+amount:amount.value,
+
+result:"等待开奖"
+
+})
+
+
+}
+
+
+
+}
+
+
+
+
+function timer(){
+
+
+setInterval(()=>{
+
+
+if(countdown.value>0)
+
+countdown.value--
+
+
+else
+
+canBet.value=false
+
+
+
+},1000)
+
+
+
+}
+
+
+
+
+
+onMounted(()=>{
+
+
+load()
+
+timer()
+
+
+})
+
+
+
+
 </script>
 
+
+
+
+
 <style scoped>
-.game-container { padding: 20px; color: #fff; background-color: #0f2d17; }
-.balance-timer { display: flex; justify-content: space-between; margin-bottom: 10px; }
-.result-display { font-size: 20px; margin-bottom: 10px; text-align: center; }
-.bet-board { display: flex; justify-content: space-around; border: 3px solid gold; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-.bet-option { flex: 1; text-align: center; color: white; font-weight: bold; padding: 20px; cursor: pointer; }
-.chips button { margin: 5px; border-radius: 50%; width: 50px; height: 50px; font-weight: bold; color: white; border: 2px solid #fff; }
-.current-bet { margin: 10px 0; }
-.bet-records { width: 100%; border-collapse: collapse; margin-top: 10px; }
-.bet-records th, .bet-records td { border: 1px solid #fff; padding: 5px; text-align: center; }
+
+
+.game-container{
+
+background:#06351d;
+
+color:white;
+
+padding:20px;
+
+}
+
+
+
+.top{
+
+display:flex;
+
+justify-content:space-between;
+
+font-size:20px;
+
+}
+
+
+
+.result{
+
+text-align:center;
+
+font-size:24px;
+
+margin:20px;
+
+}
+
+
+
+.board{
+
+display:flex;
+
+border:4px solid gold;
+
+border-radius:15px;
+
+overflow:hidden;
+
+}
+
+
+
+.area{
+
+flex:1;
+
+height:150px;
+
+display:flex;
+
+justify-content:center;
+
+align-items:center;
+
+flex-direction:column;
+
+cursor:pointer;
+
+}
+
+
+
+.chips button{
+
+width:55px;
+
+height:55px;
+
+border-radius:50%;
+
+margin:10px;
+
+}
+
+
+
+.c10{
+
+background:red;
+
+}
+
+
+.c50{
+
+background:blue;
+
+}
+
+
+.c100{
+
+background:green;
+
+}
+
+
+.c500{
+
+background:purple;
+
+}
+
+
+.c1000{
+
+background:black;
+
+color:white;
+
+}
+
+
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+margin-top:20px;
+
+}
+
+
+
+td,th{
+
+border:1px solid white;
+
+padding:10px;
+
+text-align:center;
+
+}
+
+
 </style>
