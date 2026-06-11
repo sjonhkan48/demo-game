@@ -7,6 +7,8 @@ const Player = require("./models/player");
 const Bet = require("./models/Bet");
 
 const app = express();
+
+// 允许跨域
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
@@ -45,10 +47,12 @@ app.get("/api/score/:id", async (req, res) => {
 app.post("/api/bet", async (req, res) => {
   try {
     const { playerId, area, amount } = req.body;
-    if (!playerId || !area || !amount) return res.json({ success: false, message: "下注数据错误" });
+    if (!playerId || !area || !amount)
+      return res.json({ success: false, message: "下注数据错误" });
 
     const player = await Player.findOne({ playerId });
     if (!player) return res.json({ success: false, message: "玩家不存在" });
+
     if (player.score < amount) return res.json({ success: false, message: "余额不足" });
 
     player.score -= Number(amount);
@@ -69,7 +73,7 @@ app.post("/api/bet", async (req, res) => {
 });
 
 // ----------------------
-// 玩家投注记录
+// 玩家自己的投注记录
 // ----------------------
 app.get("/api/bets/:playerId", async (req, res) => {
   const list = await Bet.find({ playerId: req.params.playerId }).sort({ createdAt: -1 });
@@ -82,48 +86,47 @@ app.get("/api/bets/:playerId", async (req, res) => {
 let currentResult = "等待开奖";
 
 app.get("/api/result", (req, res) => {
-  res.json({
-    result: currentResult,
-  });
+  res.json({ result: currentResult });
 });
 
 // ----------------------
 // 后台管理接口
 // ----------------------
-const adminRouter = express.Router();
 
-// 玩家列表
-adminRouter.get("/players", async (req, res) => {
-  const players = await Player.find({}).sort({ createdAt: -1 });
-  res.json(players);
+// 获取玩家列表
+app.get("/admin/players", async (req, res) => {
+  const list = await Player.find().sort({ createdAt: 1 });
+  res.json(list);
 });
 
-// 修改玩家积分和名称
-adminRouter.post("/player/:id", async (req, res) => {
+// 修改玩家信息
+app.post("/admin/player/:id", async (req, res) => {
   const { name, score } = req.body;
-  const updateData = {};
-  if (name !== undefined) updateData.name = name;
-  if (score !== undefined) updateData.score = score;
-
-  const player = await Player.findOneAndUpdate({ playerId: req.params.id }, updateData, { new: true });
-  res.json(player);
+  const player = await Player.findOne({ playerId: req.params.id });
+  if (!player) return res.json({ success: false, message: "玩家不存在" });
+  if (name) player.name = name;
+  if (score !== undefined) player.score = score;
+  await player.save();
+  res.json({ success: true, player });
 });
 
-// 新增玩家
-adminRouter.post("/invite", async (req, res) => {
-  const playerId = "player_" + Math.random().toString(36).substring(2, 10);
-  const player = await Player.create({ playerId, name: "新玩家", score: 10000 });
-  res.json({ playerId, url: `/?player=${playerId}`, score: player.score });
+// 获取全部投注记录
+app.get("/admin/records", async (req, res) => {
+  const records = await Bet.find().sort({ createdAt: -1 });
+  res.json(records);
 });
 
-// 手动开奖
-adminRouter.post("/open", async (req, res) => {
+// 后台开奖
+app.post("/admin/open", async (req, res) => {
   const { result } = req.body;
   currentResult = result;
 
   const bets = await Bet.find({ settled: false });
+
   for (const bet of bets) {
-    const win = bet.area === result;
+    let win = bet.area === result;
+
+    // 结算结果
     bet.result = win ? "win" : "lose";
     bet.settled = true;
     await bet.save();
@@ -131,7 +134,11 @@ adminRouter.post("/open", async (req, res) => {
     if (win) {
       const player = await Player.findOne({ playerId: bet.playerId });
       if (player) {
-        let multiple = result === "和" ? 8 : result === "庄" ? 0.95 : 1;
+        let multiple = 1;
+        if (result === "和") multiple = 8;
+        else if (result === "庄") multiple = 0.95;
+        else multiple = 1;
+
         player.score += Math.floor(bet.amount * multiple);
         await player.save();
       }
@@ -142,19 +149,18 @@ adminRouter.post("/open", async (req, res) => {
 });
 
 // 下一轮
-adminRouter.post("/next", async (req, res) => {
+app.post("/admin/next", async (req, res) => {
   currentResult = "等待开奖";
+  await Bet.updateMany({}, { settled: false, result: "pending" });
   res.json({ success: true });
 });
 
-// 开奖记录
-adminRouter.get("/records", async (req, res) => {
-  const records = await Bet.find({}).sort({ createdAt: -1 });
-  res.json(records);
+// 生成玩家邀请
+app.post("/admin/invite", async (req, res) => {
+  const id = `player_${Math.random().toString(36).substr(2, 8)}`;
+  const player = await Player.create({ playerId: id, name: "玩家", score: 10000 });
+  res.json({ playerId: id, url: `/?player=${id}` });
 });
-
-// 挂载 admin
-app.use("/admin", adminRouter);
 
 // ----------------------
 // 启动服务
