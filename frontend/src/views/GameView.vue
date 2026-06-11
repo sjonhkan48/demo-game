@@ -175,16 +175,17 @@ v-for="b in records"
 
 <script setup>
 
-
-import {
+import{
 ref,
 reactive,
-computed,
 onMounted
-} from "vue"
-
+}from "vue"
 
 import axios from "axios"
+
+import {
+io
+}from "socket.io-client"
 
 
 
@@ -206,38 +207,29 @@ result:"等待开奖"
 
 
 
-
 const countdown=ref(20)
-
-
-const canBet=ref(true)
 
 
 
 const options=[
 
-
 {
 name:"闲",
-odds:1,
-color:"#2049a0"
+color:"#1745a0",
+odds:1
 },
-
 
 {
 name:"和",
-odds:8,
-color:"#178c43"
+color:"#14853d",
+odds:8
 },
-
 
 {
 name:"庄",
-odds:0.95,
-color:"#b51616"
+color:"#b31319",
+odds:.95
 }
-
-
 
 ]
 
@@ -247,13 +239,12 @@ const chips=[10,50,100,500,1000]
 
 
 
-const selected=ref(0)
+const selectedChip=ref(0)
+
+const customBet=ref(0)
 
 
-const customBet=ref(null)
-
-
-const currentArea=ref(null)
+const currentOption=ref("")
 
 
 
@@ -261,36 +252,23 @@ const records=ref([])
 
 
 
-const amount=computed(()=>{
-
-
-return customBet.value || selected.value
-
-
-})
-
-
-
 
 
 function selectChip(c){
 
-selected.value=c
+selectedChip.value=c
 
-customBet.value=null
-
-}
-
-
-
-function selectArea(a){
-
-currentArea.value=a
+customBet.value=0
 
 }
 
 
 
+function choose(o){
+
+currentOption.value=o
+
+}
 
 
 
@@ -317,25 +295,34 @@ await axios.get(
 )
 
 
+countdown.value=g.data.time
+
 game.result=g.data.result
 
 
-countdown.value=g.data.time
-
-
 
 }
 
 
 
 
-async function bet(){
 
 
 
-if(!currentArea.value){
+async function placeBet(){
 
-alert("请选择下注区域")
+
+let amount=
+customBet.value ||
+selectedChip.value
+
+
+
+if(
+!currentOption.value
+){
+
+alert("请选择区域")
 
 return
 
@@ -343,15 +330,9 @@ return
 
 
 
-if(amount.value<=0){
-
-return
-
-}
-
-
-
-if(amount.value>player.balance){
+if(
+amount>player.balance
+){
 
 alert("余额不足")
 
@@ -361,43 +342,34 @@ return
 
 
 
-
-
-let res =
+let r=
 await axios.post(
 "/api/bets",
 {
 
-
 playerId:player.id,
 
+option:currentOption.value,
 
-option:currentArea.value,
-
-
-amount:amount.value
-
+amount
 
 }
-
 )
 
 
+if(r.data.success){
 
-if(res.data.success){
 
-
-player.balance-=amount.value
-
+player.balance-=amount
 
 
 records.value.push({
 
-playerId:player.id,
+playerId:"player1",
 
-option:currentArea.value,
+option:currentOption.value,
 
-amount:amount.value,
+amount,
 
 result:"等待开奖"
 
@@ -407,32 +379,28 @@ result:"等待开奖"
 }
 
 
-
 }
+
 
 
 
 
 function timer(){
 
-
 setInterval(()=>{
 
 
-if(countdown.value>0)
+if(countdown.value>0){
 
 countdown.value--
 
+}else{
 
-else
 
-canBet.value=false
-
+}
 
 
 },1000)
-
-
 
 }
 
@@ -443,18 +411,60 @@ canBet.value=false
 onMounted(()=>{
 
 
-load()
+load();
 
-timer()
+timer();
+
+
+
+let socket=
+io();
+
+
+socket.on(
+"update",
+data=>{
+
+
+if(data.player){
+
+Object.assign(
+player,
+data.player
+)
+
+}
+
+
+if(data.game){
+
+Object.assign(
+game,
+data.game
+)
+
+countdown.value=
+data.game.time
+
+}
+
+
+
+if(data.bets){
+
+records.value=
+data.bets
+
+}
 
 
 })
 
 
+})
 
 
 </script>
-
 
 
 
