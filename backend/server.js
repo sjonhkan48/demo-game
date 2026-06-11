@@ -1,180 +1,456 @@
-require("dotenv").config();
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const http = require("http");
-const { Server } = require("socket.io");
+require("dotenv").config()
 
-const Player = require("./models/player");
-const Bet = require("./models/Bet");
+const express=require("express")
+const mongoose=require("mongoose")
+const cors=require("cors")
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-// 允许跨域
-app.use(cors());
-app.use(express.json());
+const Player=require("./models/player")
+const Bet=require("./models/Bet")
 
-// ----------------------
-// MongoDB 连接
-// ----------------------
+
+const app=express()
+
+
+app.use(cors())
+
+app.use(express.json())
+
+
+
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log("MongoDB Error:", err));
 
-// ----------------------
-// 首页测试
-// ----------------------
-app.get("/", (req, res) => {
-  res.json({ status: "ok", message: "backend running" });
-});
+.then(()=>console.log("MongoDB ok"))
 
-// ----------------------
-// 获取玩家余额
-// ----------------------
-app.get("/api/score/:id", async (req, res) => {
-  let player = await Player.findOne({ playerId: req.params.id });
-  if (!player) {
-    player = await Player.create({
-      playerId: req.params.id,
-      name: "玩家",
-      score: 10000,
-    });
-  }
-  res.json(player);
-});
+.catch(e=>console.log(e))
 
-// ----------------------
-// 玩家下注
-// ----------------------
-app.post("/api/bet", async (req, res) => {
-  try {
-    const { playerId, area, amount } = req.body;
-    if (!playerId || !area || !amount)
-      return res.json({ success: false, message: "下注数据错误" });
 
-    const player = await Player.findOne({ playerId });
-    if (!player) return res.json({ success: false, message: "玩家不存在" });
 
-    if (player.score < amount) return res.json({ success: false, message: "余额不足" });
 
-    player.score -= Number(amount);
-    await player.save();
 
-    const bet = await Bet.create({
-      playerId,
-      area,
-      amount: Number(amount),
-      result: "pending",
-      settled: false,
-    });
+// 首页
 
-    io.emit("gameUpdate"); // 推送前端
+app.get("/",(req,res)=>{
 
-    res.json({ success: true, score: player.score, bet });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+res.json({
 
-// ----------------------
-// 玩家投注记录
-// ----------------------
-app.get("/api/bets/:playerId", async (req, res) => {
-  const list = await Bet.find({ playerId: req.params.playerId }).sort({ createdAt: -1 });
-  res.json(list);
-});
+status:"running"
 
-// ----------------------
-// 游戏状态
-// ----------------------
-let currentResult = "等待开奖";
+})
 
-app.get("/api/result", (req, res) => {
-  res.json({ result: currentResult });
-});
 
-// =====================
-// 后台接口
-// =====================
+})
 
-// 获取所有玩家
-app.get("/admin/players", async (req, res) => {
-  const players = await Player.find();
-  res.json(players);
-});
 
-// 新增玩家
-app.post("/admin/player/add", async (req, res) => {
-  const { playerId, name, score } = req.body;
-  const exist = await Player.findOne({ playerId });
-  if (exist) return res.json({ success: false, message: "玩家已存在" });
 
-  const player = await Player.create({ playerId, name: name || "玩家", score: Number(score) || 10000 });
-  io.emit("playersUpdate"); // 推送前端更新
-  res.json({ success: true, player });
-});
 
-// 修改玩家积分
-app.post("/admin/player/update", async (req, res) => {
-  const { playerId, score, name } = req.body;
-  const player = await Player.findOne({ playerId });
-  if (!player) return res.json({ success: false, message: "玩家不存在" });
+// 玩家余额
 
-  player.score = Number(score);
-  if (name) player.name = name;
-  await player.save();
-  io.emit("playersUpdate"); // 推送前端
-  res.json({ success: true, player });
-});
+app.get("/api/score/:id",async(req,res)=>{
 
-// 开奖
-app.post("/admin/open", async (req, res) => {
-  const { result } = req.body;
-  currentResult = result;
 
-  const bets = await Bet.find({ settled: false });
-  for (const bet of bets) {
-    const win = bet.area === result;
-    bet.result = win ? "win" : "lose";
-    bet.settled = true;
-    await bet.save();
+let p =
+await Player.findOne({
 
-    if (win) {
-      const player = await Player.findOne({ playerId: bet.playerId });
-      if (player) {
-        let rate = 1;
-        if (result === "和") rate = 8;
-        if (result === "庄") rate = 0.95;
+playerId:req.params.id
 
-        player.score += Math.floor(bet.amount * rate);
-        await player.save();
-      }
-    }
-  }
+})
 
-  io.emit("gameUpdate"); // 前端同步
-  res.json({ success: true });
-});
+
+if(!p){
+
+p=
+await Player.create({
+
+playerId:req.params.id,
+
+name:"玩家",
+
+score:10000
+
+})
+
+}
+
+
+
+res.json(p)
+
+
+
+})
+
+
+
+
+
+// 玩家列表
+
+app.get("/api/players",async(req,res)=>{
+
+
+const list =
+await Player.find()
+
+
+res.json(list)
+
+
+})
+
+
+
+
+
+
+// 玩家修改
+
+app.post(
+"/admin/player/update",
+
+async(req,res)=>{
+
+
+const {
+
+playerId,
+
+name,
+
+score
+
+
+}=req.body
+
+
+
+await Player.updateOne(
+
+{playerId},
+
+{
+
+name,
+
+score
+
+}
+
+
+)
+
+
+
+res.json({
+
+success:true
+
+})
+
+
+
+})
+
+
+
+
+
+
+//下注
+
+
+app.post("/api/bet",
+
+async(req,res)=>{
+
+
+const {
+
+playerId,
+
+area,
+
+amount
+
+
+}=req.body
+
+
+
+const p =
+await Player.findOne({
+
+playerId
+
+})
+
+
+
+if(p.score < amount)
+
+return res.json({
+
+success:false,
+
+message:"余额不足"
+
+})
+
+
+
+
+p.score-=amount
+
+
+await p.save()
+
+
+
+const bet =
+await Bet.create({
+
+playerId,
+
+area,
+
+amount,
+
+result:"pending",
+
+settled:false
+
+
+})
+
+
+
+res.json({
+
+success:true,
+
+score:p.score,
+
+bet
+
+
+})
+
+
+
+})
+
+
+
+
+
+
+
+//投注记录
+
+app.get(
+"/api/records",
+
+async(req,res)=>{
+
+
+const b =
+await Bet.find()
+.sort({
+
+createdAt:-1
+
+})
+
+
+res.json(b)
+
+
+})
+
+
+
+
+
+
+
+
+//开奖
+
+
+let current="等待开奖"
+
+
+
+
+
+app.post("/admin/open",
+
+async(req,res)=>{
+
+
+const result=req.body.result
+
+
+
+current=result
+
+
+
+
+const bets =
+await Bet.find({
+
+settled:false
+
+})
+
+
+
+for(let b of bets){
+
+
+
+let win =
+b.area===result
+
+
+
+b.result =
+win?"win":"lose"
+
+
+b.settled=true
+
+
+
+await b.save()
+
+
+
+if(win){
+
+
+let p =
+await Player.findOne({
+
+playerId:b.playerId
+
+})
+
+
+
+let rate=1
+
+
+
+if(result==="和")
+
+rate=8
+
+
+if(result==="庄")
+
+rate=0.95
+
+
+
+
+p.score +=
+Math.floor(
+b.amount*rate
+)
+
+
+
+await p.save()
+
+
+}
+
+
+
+
+}
+
+
+
+res.json({
+
+success:true,
+
+result
+
+
+})
+
+
+
+})
+
+
+
+
+
+
+
 
 // 下一轮
-app.post("/admin/next", async (req, res) => {
-  currentResult = "等待开奖";
-  await Bet.updateMany({}, { settled: false, result: "pending" });
-  io.emit("gameUpdate"); // 前端同步
-  res.json({ success: true });
-});
 
-// ----------------------
-// WebSocket
-// ----------------------
-io.on("connection", socket => {
-  console.log("客户端已连接");
-});
 
-// ----------------------
-// 启动服务
-// ----------------------
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running at port ${PORT}`));
+app.post("/admin/next",
+
+(req,res)=>{
+
+
+current="等待开奖"
+
+
+res.json({
+
+success:true
+
+})
+
+
+})
+
+
+
+
+
+
+app.get("/api/result",
+
+(req,res)=>{
+
+
+res.json({
+
+result:current
+
+})
+
+
+})
+
+
+
+
+
+
+
+
+const PORT =
+process.env.PORT||3000
+
+
+
+app.listen(PORT,()=>{
+
+
+console.log(
+"server running",
+PORT
+)
+
+})
