@@ -71,83 +71,217 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from "vue"
 
-const player = reactive({ id: "player1", balance: 1000 })
-const game = reactive({ result: "等待开奖" })
-const countdown = ref(20)
-const countdownText = ref("下注倒计时 20 秒")
-const canBet = ref(true)
+import {
+reactive,
+ref,
+onMounted
+}
+from "vue"
 
-const options = [
-  { name: "闲", color: "#1748a5", odds: 1 },
-  { name: "和", color: "#14853c", odds: 8 },
-  { name: "庄", color: "#b31319", odds: 0.95 },
+
+import axios from "axios"
+
+
+
+const api=
+"https://demo-game-3.onrender.com"
+
+
+
+const playerId=
+location.pathname.split("/").pop()
+
+
+
+const player=
+reactive({
+
+id:playerId,
+
+balance:0
+
+})
+
+
+
+const game=
+reactive({
+
+result:"等待开奖"
+
+})
+
+
+
+const countdown=
+ref(20)
+
+
+
+const countdownText=
+ref("下注倒计时 20 秒")
+
+
+const canBet=
+ref(true)
+
+
+
+const options=[
+
+{name:"闲",color:"#1748a5",odds:1},
+
+{name:"和",color:"#14853c",odds:8},
+
+{name:"庄",color:"#b31319",odds:0.95}
+
 ]
 
-const chips = [10, 50, 100, 500, 1000]
 
-const selectedChip = ref(0)
-const customBet = ref(0)
-const currentOption = ref("")
-const records = ref([])
 
-function selectChip(value) {
-  if (!canBet.value) return
-  selectedChip.value = value
-  customBet.value = 0
+const chips=[10,50,100,500,1000]
+
+
+
+const selectedChip=ref(0)
+
+
+const customBet=ref(0)
+
+
+const currentOption=ref("")
+
+
+const records=ref([])
+
+
+
+async function loadPlayer(){
+
+
+let res=
+await axios.get(
+
+api+
+"/api/player/"
++
+playerId
+
+)
+
+
+Object.assign(
+
+player,
+
+res.data
+
+)
+
+
+
 }
 
-function choose(name) {
-  if (!canBet.value) return
-  currentOption.value = name
+
+
+
+
+async function placeBet(){
+
+
+
+let amount=
+customBet.value ||
+selectedChip.value
+
+
+
+await axios.post(
+
+api+"/api/bets",
+
+{
+
+
+playerId,
+
+option:currentOption.value,
+
+amount
+
+
 }
 
-function placeBet() {
-  if (!currentOption.value) {
-    alert("请选择下注区域")
-    return
-  }
-  let amount = customBet.value || selectedChip.value
-  if (!amount) {
-    alert("请选择筹码")
-    return
-  }
-  if (amount > player.balance) {
-    alert("余额不足")
-    return
-  }
 
-  player.balance -= amount
-  records.value.push({
-    id: Date.now(),
-    playerId: player.id,
-    option: currentOption.value,
-    amount: amount,
-    result: "等待开奖",
-  })
 
-  selectedChip.value = 0
-  customBet.value = 0
-  currentOption.value = ""
+)
+
+
+
+loadPlayer()
+
+
+
 }
 
-function startCountdown() {
-  const timer = setInterval(() => {
-    if (countdown.value > 0) {
-      countdown.value--
-      countdownText.value = "下注倒计时 " + countdown.value + " 秒"
-    } else {
-      canBet.value = false
-      countdownText.value = "停止下注"
-      clearInterval(timer)
-    }
-  }, 1000)
+
+
+
+function startCountdown(){
+
+
+let t=setInterval(()=>{
+
+
+countdown.value--
+
+
+countdownText.value=
+"下注倒计时 "
++
+countdown.value
++
+" 秒"
+
+
+
+if(countdown.value<=0){
+
+
+canBet.value=false
+
+
+countdownText.value="停止下注"
+
+
+clearInterval(t)
+
 }
 
-onMounted(() => {
-  startCountdown()
+
+},1000)
+
+
+}
+
+
+
+
+
+onMounted(()=>{
+
+
+loadPlayer()
+
+
+startCountdown()
+
+
 })
+
+
+
 </script>
 
 <style scoped>
