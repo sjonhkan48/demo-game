@@ -1,31 +1,37 @@
-import {createRouter,createWebHistory} from "vue-router"
+import { createRouter, createWebHistory } from "vue-router"
 
 import GameView from "../views/GameView.vue"
 import AdminView from "../views/AdminView.vue"
 
 
-const router=createRouter({
+const router = createRouter({
 
-history:createWebHistory(),
+  history: createWebHistory(),
 
+  routes: [
 
-routes:[
-
-
-{
-path:"/",
-component:GameView
-},
-
-
-{
-path:"/admin",
-component:AdminView
-}
+    {
+      path: "/",
+      name: "home",
+      component: GameView
+    },
 
 
-]
+    {
+      path: "/admin",
+      name: "admin",
+      component: AdminView
+    },
 
+
+    {
+      path: "/player/:id",
+      name: "player",
+      component: GameView
+    }
+
+
+  ]
 
 })
 
