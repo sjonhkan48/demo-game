@@ -39,10 +39,18 @@ origin:"*"
 
 
 mongoose.connect(
-"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
+process.env.MONGO_URI
 )
-.then(()=>console.log("MongoDB connected"))
-.catch(err=>console.log(err));
+.then(()=>{
+
+console.log("MongoDB connected");
+
+})
+.catch(err=>{
+
+console.log("MongoDB error:",err);
+
+});
 
 
 
@@ -191,20 +199,48 @@ let game;
 async function init(){
 
 
+try{
+
+
 game=await Game.findOne();
 
 
 if(!game){
 
+
 game=await Game.create({});
 
+
+}
+
+
+console.log("Game initialized");
+
+
+
+}catch(err){
+
+
+console.log(
+"Game init error:",
+err
+);
+
+
 }
 
 
 }
 
+
+mongoose.connection.once(
+"open",
+()=>{
 
 init();
+
+}
+);
 
 
 
