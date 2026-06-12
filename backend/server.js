@@ -1,12 +1,12 @@
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
-const { Server } = require("socket.io");
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+const {Server}=require("socket.io");
+const mongoose=require("mongoose");
+const {v4:uuid}=require("uuid");
 
 
-const app = express();
+const app=express();
 
 
 app.use(cors({
@@ -19,13 +19,11 @@ app.use(express.json());
 const server=http.createServer(app);
 
 
-
 const io=new Server(server,{
     cors:{
         origin:"*"
     }
 });
-
 
 
 // ======================
@@ -34,15 +32,10 @@ const io=new Server(server,{
 
 
 mongoose.connect(
-"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/demo-game"
+"你的MongoDB连接地址"
 )
-.then(()=>{
-console.log("MongoDB connected")
-})
-.catch(err=>{
-console.log(err)
-});
-
+.then(()=>console.log("MongoDB connected"))
+.catch(err=>console.log(err));
 
 
 
@@ -55,8 +48,7 @@ const PlayerSchema=new mongoose.Schema({
 
 id:{
 type:String,
-default:uuidv4,
-unique:true
+default:()=>uuid()
 },
 
 name:String,
@@ -75,15 +67,17 @@ default:"在线"
 });
 
 
-
 const RecordSchema=new mongoose.Schema({
 
 
 playerId:String,
 
+playerName:String,
+
 option:String,
 
 amount:Number,
+
 
 result:{
 type:String,
@@ -91,7 +85,7 @@ default:"等待开奖"
 },
 
 
-createdAt:{
+time:{
 type:Date,
 default:Date.now
 }
@@ -109,10 +103,12 @@ type:String,
 default:"等待开奖"
 },
 
+
 betting:{
 type:Boolean,
 default:true
 },
+
 
 countdown:{
 type:Number,
@@ -138,7 +134,6 @@ RecordSchema
 );
 
 
-
 const Game=mongoose.model(
 "Game",
 GameSchema
@@ -148,64 +143,67 @@ GameSchema
 
 
 // ======================
-// 游戏状态
+// 初始化游戏
 // ======================
 
 
-let gameState;
+let game;
 
 
-
-(async()=>{
-
-gameState=await Game.findOne();
+async function init(){
 
 
-if(!gameState){
+game=await Game.findOne();
 
-gameState=await Game.create({});
+
+if(!game){
+
+game=await Game.create({});
 
 }
 
 
-})();
+}
 
+
+init();
 
 
 
 
 // ======================
-// 同步
+// 广播
 // ======================
 
 
 async function broadcast(){
 
 
-const players=
+let players=
 await Player.find();
 
 
-const records=
+let records=
 await Record.find()
 .sort({
-createdAt:-1
+time:-1
 });
 
 
 io.emit(
 "update",
 {
+
 players,
+
 records,
-game:gameState
+
+game
+
+
+});
+
 }
-);
-
-
-}
-
-
 
 
 
@@ -214,13 +212,26 @@ io.on(
 "connection",
 socket=>{
 
-
 broadcast();
 
+});
 
-}
 
-);
+
+
+
+// ======================
+// 首页
+// ======================
+
+
+app.get("/",(req,res)=>{
+
+res.send(
+"GAME SERVER RUNNING"
+)
+
+});
 
 
 
@@ -228,48 +239,47 @@ broadcast();
 
 
 // ======================
-// 玩家接口
+// 玩家列表
 // ======================
 
 
-
-// 获取全部玩家
 
 app.get(
 "/api/players",
 async(req,res)=>{
 
 
-const players=
+let data=
 await Player.find();
 
 
-res.json(players);
+res.json(data);
 
 
-}
-
-);
-
+});
 
 
 
-// 获取单个玩家
+
+
+// ======================
+// 单玩家
+// ======================
+
+
 
 app.get(
 "/api/player/:id",
 async(req,res)=>{
 
 
-const player=
+let p=
 await Player.findOne({
-
 id:req.params.id
-
 });
 
 
-if(!player){
+if(!p){
 
 return res.json({
 
@@ -277,95 +287,22 @@ id:req.params.id,
 
 balance:0
 
+})
+
+}
+
+
+res.json(p);
+
+
 });
-
-
-}
-
-
-res.json(player);
-
-
-
-}
-
-);
 
 
 
 
 
 // ======================
-// 新增玩家
-// ======================
-
-
-
-app.post(
-"/admin/create-player",
-async(req,res)=>{
-
-
-try{
-
-
-const player=
-await Player.create({
-
-id:uuidv4(),
-
-name:req.body.name,
-
-balance:Number(req.body.balance),
-
-status:"在线"
-
-});
-
-
-
-await broadcast();
-
-
-
-res.json({
-
-success:true,
-
-player
-
-});
-
-
-
-}catch(e){
-
-
-console.log(e);
-
-
-res.status(500).json({
-
-success:false
-
-});
-
-
-}
-
-
-}
-
-);
-
-
-
-
-
-
-
-// ======================
-// 修改玩家
+// 添加/修改玩家
 // ======================
 
 
@@ -388,18 +325,31 @@ balance
 
 
 
-const player=
-await Player.findOne({
-id
+let player=
+await Player.findOne({id});
+
+
+
+if(!player){
+
+
+player=
+await Player.create({
+
+id,
+
+name,
+
+balance:Number(balance)
+
+
 });
 
 
-
-if(player){
+}else{
 
 
 player.name=name;
-
 
 player.balance=
 Number(balance);
@@ -417,15 +367,17 @@ await broadcast();
 
 res.json({
 
-success:true
+success:true,
+
+player
+
 
 });
 
 
 
-}
+});
 
-);
 
 
 
@@ -435,7 +387,6 @@ success:true
 // ======================
 // 投注
 // ======================
-
 
 
 app.post(
@@ -451,34 +402,27 @@ option,
 
 amount
 
+
 }=req.body;
 
 
 
-const player=
+let player=
 await Player.findOne({
 id:playerId
 });
 
 
 
-if(!player){
-
+if(!player)
 return res.json({
-
 success:false,
-
 msg:"玩家不存在"
-
 });
 
 
-}
 
-
-
-if(player.balance < amount){
-
+if(player.balance < amount)
 
 return res.json({
 
@@ -489,22 +433,20 @@ msg:"余额不足"
 });
 
 
-}
 
 
-
-
-player.balance -= Number(amount);
+player.balance-=Number(amount);
 
 
 await player.save();
 
 
 
-const record=
 await Record.create({
 
 playerId,
+
+playerName:player.name,
 
 option,
 
@@ -521,82 +463,69 @@ await broadcast();
 
 res.json({
 
-success:true,
-
-record
+success:true
 
 });
 
 
 
-}
-
-);
-
-
-
-
-
-
-
-
-// ======================
-// 记录
-// ======================
-
-
-app.get(
-"/api/records",
-async(req,res)=>{
-
-
-const records=
-await Record.find()
-.sort({
-createdAt:-1
 });
 
 
-res.json(records);
-
-
-
-}
-
-);
 
 
 
 
-
-
-
-// ======================
+// =====================
 // 开奖
-// ======================
-
+// =====================
 
 
 app.post(
 "/admin/open",
+
 async(req,res)=>{
 
 
-const result=req.body.result;
+const {
+
+result
+
+}=req.body;
 
 
 
-gameState.result=result;
+
+game.result=result;
+
+game.betting=false;
 
 
-gameState.betting=false;
-
-
-await gameState.save();
+await game.save();
 
 
 
-const records=
+
+// 赔率表
+
+const odds={
+
+"闲":1,
+
+"和":8,
+
+"庄":0.95
+
+};
+
+
+
+
+// 查询等待开奖记录
+
+
+let records=
+
 await Record.find({
 
 result:"等待开奖"
@@ -606,11 +535,13 @@ result:"等待开奖"
 
 
 
+
 for(let r of records){
 
 
 
-const player=
+let player=
+
 await Player.findOne({
 
 id:r.playerId
@@ -619,23 +550,68 @@ id:r.playerId
 
 
 
-if(!player)
-continue;
-
-
 
 
 if(r.option===result){
 
 
+
+//中奖
+
+
 r.result="中奖";
 
-player.balance +=
-Number(r.amount)*2;
+
+
+
+
+if(player){
+
+
+// =======================
+// 正确返奖计算
+// =======================
+//
+// 当前余额
+// +
+// 本金
+// +
+// 赢的钱
+//
+
+let reward =
+
+Number(r.amount)
+
++
+
+(
+
+Number(r.amount)
+
+*
+
+Number(odds[result])
+
+);
+
+
+
+player.balance += reward;
+
+
+
+await player.save();
+
+
+
+}
+
 
 
 
 }else{
+
 
 
 r.result="未中奖";
@@ -645,14 +621,14 @@ r.result="未中奖";
 
 
 
-await player.save();
-
-
 await r.save();
 
 
-
 }
+
+
+
+
 
 
 
@@ -660,16 +636,19 @@ await broadcast();
 
 
 
+
 res.json({
 
-success:true
+success:true,
+
+result
 
 });
 
 
-}
 
-);
+});
+
 
 
 
@@ -687,15 +666,18 @@ app.post(
 async(req,res)=>{
 
 
-gameState.result="等待开奖";
-
-gameState.betting=true;
-
-gameState.countdown=20;
+game.result=
+"等待开奖";
 
 
+game.betting=true;
 
-await gameState.save();
+
+game.countdown=20;
+
+
+
+await game.save();
 
 
 
@@ -710,45 +692,42 @@ success:true
 });
 
 
-
-}
-
-);
+});
 
 
 
 
 
+// ======================
+// 记录
+// ======================
 
-// 首页检测
+
 
 app.get(
-"/",
-(req,res)=>{
+"/api/records",
+async(req,res)=>{
 
 
-res.send(
-"GAME SERVER RUNNING"
-);
+let data=
+await Record.find()
+.sort({
+time:-1
+});
 
 
-}
+res.json(data);
 
-);
 
+});
 
 
 
 
 
 server.listen(
-process.env.PORT || 3000,
-()=>{
-
-console.log(
-"Server running"
-);
-
-}
-
+3000,
+()=>console.log(
+"server running 3000"
+)
 );
