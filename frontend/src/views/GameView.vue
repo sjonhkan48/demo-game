@@ -1,217 +1,236 @@
 <template>
-  <div class="game-container">
 
-    <!-- 顶部余额和倒计时 -->
-    <div class="top-bar">
+<div class="game-container">
 
-      <span class="balance">
-        💰 当前余额：{{ player.balance }}
-      </span>
 
-      <span class="countdown">
-        {{ countdownText }}
-      </span>
+<!-- 顶部余额和倒计时 -->
 
-    </div>
+<div class="top-bar">
 
+<span class="balance">
+💰 当前余额：{{ player.balance }}
+</span>
 
-    <!-- 游戏结果 -->
-    <div class="result">
 
-      开奖结果：
+<span class="countdown">
+{{ countdownText }}
+</span>
 
-      <span class="waiting">
-        {{ game.result }}
-      </span>
 
-    </div>
+</div>
 
 
 
-    <!-- 下注区域 -->
+<!-- 游戏结果 -->
 
-    <div class="bet-board">
 
-      <div
-        v-for="item in options"
-        :key="item.name"
-        class="bet-area"
-        :style="{background:item.color}"
-        @click="choose(item.name)"
-      >
+<div class="result">
 
-        <div class="name">
-          {{item.name}}
-        </div>
+开奖结果：
+<span class="waiting">
+{{ game.result }}
+</span>
 
-        <div class="odds">
-          赔率 {{item.odds}}
-        </div>
 
+</div>
 
-      </div>
 
 
-    </div>
+<!--下注区域 -->
 
 
+<div class="bet-board">
 
 
-    <!-- 筹码选择 -->
+<div
 
-    <div class="chips">
+v-for="item in options"
 
+:key="item.name"
 
-      <button
+class="bet-area"
 
-        v-for="chip in chips"
+:style="{background:item.color}"
 
-        :key="chip"
+@click="choose(item.name)"
 
-        :class="'chip chip'+chip"
+>
 
-        @click="selectChip(chip)"
 
-      >
+<div class="name">
+{{item.name}}
+</div>
 
-        {{chip}}
 
-      </button>
+<div class="odds">
 
+赔率 {{item.odds}}
 
+</div>
 
-      <input
 
-        type="number"
+</div>
 
-        v-model.number="customBet"
 
-        placeholder="自定义下注"
+</div>
 
-      />
 
 
-    </div>
+<!-- 筹码 -->
 
 
+<div class="chips">
 
 
+<button
 
-    <!-- 当前下注 -->
+v-for="chip in chips"
 
-    <div class="current">
+:key="chip"
 
+:class="'chip chip'+chip"
 
-      当前筹码：
+@click="selectChip(chip)"
 
-      {{selectedChip || customBet}}
+>
 
+{{chip}}
 
+</button>
 
-      当前下注：
 
-      {{currentOption || '未选择'}}
 
+<input
 
+type="number"
 
-      <button
+v-model.number="customBet"
 
-        @click="placeBet"
+placeholder="自定义下注"
 
-        :disabled="!canBet"
+/>
 
-      >
 
-        {{canBet?'确认下注':'停止下注'}}
+</div>
 
 
-      </button>
 
 
-    </div>
 
+<!--当前下注 -->
 
 
+<div class="current">
 
 
+当前筹码：
 
-    <!-- 投注记录 -->
+{{selectedChip || customBet}}
 
-    <div class="title">
 
-      投注记录
+当前下注：
 
-    </div>
+{{currentOption || '未选择'}}
 
 
 
-    <table>
+<button
 
+@click="placeBet"
 
-      <thead>
+:disabled="!canBet"
 
-        <tr>
+>
 
-          <th>玩家ID</th>
 
-          <th>区域</th>
+{{canBet?'确认下注':'停止下注'}}
 
-          <th>金额</th>
 
-          <th>结果</th>
+</button>
 
 
-        </tr>
+</div>
 
 
-      </thead>
 
 
 
-      <tbody>
+<!--记录 -->
 
 
-        <tr
+<div class="title">
 
-          v-for="item in records"
+投注记录
 
-          :key="item._id"
+</div>
 
-        >
 
-          <td>
-            {{item.playerId}}
-          </td>
 
+<table>
 
-          <td>
-            {{item.option}}
-          </td>
 
+<thead>
 
-          <td>
-            {{item.amount}}
-          </td>
+<tr>
 
+<th>玩家ID</th>
 
-          <td class="wait">
+<th>区域</th>
 
-            {{item.result}}
+<th>金额</th>
 
-          </td>
+<th>结果</th>
 
+</tr>
 
-        </tr>
 
+</thead>
 
-      </tbody>
 
+<tbody>
 
-    </table>
 
+<tr
 
+v-for="item in records"
 
-  </div>
+:key="item._id"
+
+>
+
+
+<td>
+{{item.playerId}}
+</td>
+
+
+<td>
+{{item.option}}
+</td>
+
+
+<td>
+{{item.amount}}
+</td>
+
+
+<td class="wait">
+
+{{item.result}}
+
+</td>
+
+
+</tr>
+
+
+</tbody>
+
+
+</table>
+
+
+</div>
 
 
 </template>
@@ -222,15 +241,18 @@
 
 <script setup>
 
+
 import {
 
-  reactive,
+reactive,
 
-  ref,
+ref,
 
-  onMounted
+onMounted
 
-} from "vue"
+}
+
+from "vue"
 
 
 
@@ -238,89 +260,87 @@ import axios from "axios"
 
 
 
-
-// 后端 Render 地址
-
-const API = "https://demo-game-3.onrender.com"
+import {useRoute} from "vue-router"
 
 
 
-// 自动读取链接ID
+const apiBase =
+"https://demo-game-3.onrender.com"
 
-const playerId = window.location.pathname.split("/").pop()
 
 
+const route = useRoute()
+
+
+
+// 当前玩家
 
 const player = reactive({
 
-  id:playerId,
+id:"",
 
-  balance:0
+balance:0,
+
+name:""
 
 })
+
+
 
 
 
 const game = reactive({
 
-  result:"等待开奖"
+result:"等待开奖"
 
 })
+
+
 
 
 
 const countdown = ref(20)
 
 
-
-const countdownText = ref(
-
-  "下注倒计时 20 秒"
-
-)
+const countdownText =
+ref("下注倒计时 20 秒")
 
 
 
-const canBet = ref(true)
+const canBet =
+ref(true)
+
+
 
 
 
 const options=[
 
- {
 
-  name:"闲",
-
-  color:"#1748a5",
-
-  odds:1
-
- },
+{
+name:"闲",
+color:"#1748a5",
+odds:1
+},
 
 
- {
-
-  name:"和",
-
-  color:"#14853c",
-
-  odds:8
-
- },
+{
+name:"和",
+color:"#14853c",
+odds:8
+},
 
 
- {
+{
+name:"庄",
+color:"#b31319",
+odds:0.95
+}
 
-  name:"庄",
-
-  color:"#b31319",
-
-  odds:0.95
-
- }
 
 
 ]
+
 
 
 
@@ -332,9 +352,7 @@ const chips=[10,50,100,500,1000]
 const selectedChip=ref(0)
 
 
-
 const customBet=ref(0)
-
 
 
 const currentOption=ref("")
@@ -347,29 +365,33 @@ const records=ref([])
 
 
 
+// 获取玩家
 
-
-// 获取玩家数据
 
 async function loadPlayer(){
 
 
- const res=
-
- await axios.get(
-
- `${API}/api/player/${playerId}`
-
- )
+const id=route.params.id
 
 
- Object.assign(
 
- player,
+const res =
+await axios.get(
 
- res.data
+`${apiBase}/api/player/${id}`
 
- )
+)
+
+
+
+Object.assign(
+
+player,
+
+res.data
+
+)
+
 
 
 }
@@ -378,60 +400,25 @@ async function loadPlayer(){
 
 
 
-
-
-// 获取游戏状态
-
-async function loadGame(){
-
-
- const res=
-
- await axios.get(
-
- `${API}/api/game`
-
- )
-
-
- Object.assign(
-
- game,
-
- res.data
-
- )
-
-
-}
-
-
-
-
-
-
-
-// 获取自己的下注记录
+// 获取下注记录
 
 
 async function loadRecords(){
 
 
- const res=
+const res =
+await axios.get(
 
- await axios.get(
+`${apiBase}/api/bets/${player.id}`
 
- `${API}/api/records/${playerId}`
-
- )
+)
 
 
- records.value=res.data
+
+records.value=res.data
 
 
 }
-
-
 
 
 
@@ -440,12 +427,12 @@ async function loadRecords(){
 function selectChip(value){
 
 
- if(!canBet.value)return
+if(!canBet.value)return
 
 
- selectedChip.value=value
+selectedChip.value=value
 
- customBet.value=0
+customBet.value=0
 
 
 }
@@ -457,10 +444,10 @@ function selectChip(value){
 function choose(name){
 
 
- if(!canBet.value)return
+if(!canBet.value)return
 
 
- currentOption.value=name
+currentOption.value=name
 
 
 }
@@ -469,80 +456,67 @@ function choose(name){
 
 
 
+//提交下注
 
-
-
-
-// 提交下注到 MongoDB
 
 async function placeBet(){
 
 
 
- if(!currentOption.value){
+if(!currentOption.value){
 
- alert("请选择下注区域")
+alert("请选择下注区域")
 
- return
+return
 
- }
-
-
-
- let amount=
-
- customBet.value || selectedChip.value
+}
 
 
 
 
- if(!amount){
-
- alert("请选择筹码")
-
- return
-
- }
+let amount =
+customBet.value || selectedChip.value
 
 
 
 
 
- await axios.post(
+if(!amount){
 
- `${API}/api/bets`,
+alert("请选择筹码")
 
- {
+return
 
-
- playerId,
-
-
- option:currentOption.value,
-
-
- amount
-
-
- }
-
-
- )
+}
 
 
 
 
- selectedChip.value=0
+if(amount>player.balance){
 
- customBet.value=0
+alert("余额不足")
 
- currentOption.value=""
+return
+
+}
 
 
 
- loadPlayer()
 
- loadRecords()
+await axios.post(
+
+`${apiBase}/api/bets`,
+
+{
+
+
+playerId:player.id,
+
+
+option:currentOption.value,
+
+
+amount:amount
 
 
 
@@ -550,7 +524,26 @@ async function placeBet(){
 
 
 
+)
 
+
+
+
+selectedChip.value=0
+
+customBet.value=0
+
+currentOption.value=""
+
+
+
+await loadPlayer()
+
+await loadRecords()
+
+
+
+}
 
 
 
@@ -559,39 +552,38 @@ async function placeBet(){
 function startCountdown(){
 
 
- const timer=setInterval(()=>{
+
+const timer=setInterval(()=>{
 
 
- if(countdown.value>0){
+if(countdown.value>0){
 
 
- countdown.value--
+countdown.value--
 
 
- countdownText.value=
-
- "下注倒计时 "+countdown.value+" 秒"
-
-
-
- }else{
-
-
- canBet.value=false
-
-
- countdownText.value="停止下注"
+countdownText.value=
+"下注倒计时 "+countdown.value+" 秒"
 
 
 
- clearInterval(timer)
+}else{
 
 
- }
+canBet.value=false
+
+
+countdownText.value="停止下注"
+
+
+clearInterval(timer)
+
+
+}
 
 
 
- },1000)
+},1000)
 
 
 }
@@ -602,18 +594,16 @@ function startCountdown(){
 
 
 
-
-onMounted(()=>{
-
-
- loadPlayer()
-
- loadGame()
-
- loadRecords()
+onMounted(async()=>{
 
 
- startCountdown()
+await loadPlayer()
+
+
+await loadRecords()
+
+
+startCountdown()
 
 
 
@@ -621,9 +611,7 @@ onMounted(()=>{
 
 
 
-
 </script>
-
 
 
 
@@ -635,13 +623,18 @@ onMounted(()=>{
 
 .game-container {
 
+
 background:#0b301b;
+
 
 color:white;
 
+
 padding:20px;
 
+
 min-height:100vh;
+
 
 font-family:Arial;
 
@@ -650,11 +643,15 @@ font-family:Arial;
 
 
 
-.top-bar{
+
+.top-bar {
+
 
 display:flex;
 
+
 justify-content:space-between;
+
 
 font-size:20px;
 
@@ -665,14 +662,15 @@ font-size:20px;
 
 .balance{
 
+
 color:#ffd700;
 
 
 }
 
 
-
 .countdown{
+
 
 color:red;
 
@@ -681,11 +679,16 @@ color:red;
 
 
 
+
+
 .result{
+
 
 text-align:center;
 
+
 font-size:28px;
+
 
 margin:25px 0;
 
@@ -693,7 +696,9 @@ margin:25px 0;
 }
 
 
+
 .waiting{
+
 
 color:#ffd700;
 
@@ -702,15 +707,22 @@ color:#ffd700;
 
 
 
+
+
 .bet-board{
+
 
 display:flex;
 
+
 border:4px solid #ffd700;
+
 
 border-radius:15px;
 
+
 padding:10px;
+
 
 gap:10px;
 
@@ -719,21 +731,30 @@ gap:10px;
 
 
 
+
 .bet-area{
+
 
 flex:1;
 
+
 height:130px;
+
 
 border-radius:8px;
 
+
 display:flex;
+
 
 flex-direction:column;
 
+
 justify-content:center;
 
+
 align-items:center;
+
 
 cursor:pointer;
 
@@ -741,9 +762,12 @@ cursor:pointer;
 }
 
 
+
 .name{
 
+
 font-size:40px;
+
 
 font-weight:bold;
 
@@ -751,14 +775,32 @@ font-weight:bold;
 }
 
 
+.odds{
+
+
+font-size:18px;
+
+
+}
+
+
+
+
 
 .chips{
 
+
 display:flex;
+
 
 justify-content:center;
 
+
+align-items:center;
+
+
 gap:14px;
+
 
 margin-top:25px;
 
@@ -767,24 +809,36 @@ margin-top:25px;
 
 
 
+
 .chip{
+
 
 width:62px;
 
+
 height:62px;
+
 
 border-radius:50%;
 
+
 border:5px dashed white;
+
 
 color:white;
 
+
 font-size:16px;
+
+
+font-weight:bold;
+
 
 cursor:pointer;
 
 
 }
+
 
 
 
@@ -797,14 +851,14 @@ background:red;
 
 .chip50{
 
-background:blue;
+background:#004cff;
 
 }
 
 
 .chip100{
 
-background:green;
+background:#009900;
 
 }
 
@@ -824,31 +878,67 @@ background:black;
 
 
 
+
+
 .current{
+
 
 text-align:center;
 
+
+font-size:18px;
+
+
 margin:20px 0;
 
+
 }
+
+
+
+
+.title{
+
+
+margin-top:30px;
+
+
+font-size:20px;
+
+
+font-weight:bold;
+
+
+}
+
 
 
 
 table{
 
+
 width:100%;
 
+
 border-collapse:collapse;
+
+
+margin-top:10px;
 
 
 }
 
 
+
+
 th,td{
+
 
 border:1px solid white;
 
+
 padding:10px;
+
 
 text-align:center;
 
@@ -862,6 +952,7 @@ text-align:center;
 color:#ffd700;
 
 }
+
 
 
 </style>
