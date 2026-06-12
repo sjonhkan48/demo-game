@@ -1,118 +1,526 @@
 <template>
-  <div class="admin-container">
-    <h2>玩家管理</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>名称</th>
-          <th>余额</th>
-          <th>操作</th>
-          <th>当前状态</th>
-          <th>开奖设置</th>
-          <th>下一轮</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="player in players" :key="player.id">
-          <td>{{ player.id }}</td>
-          <td><input v-model="player.name" /></td>
-          <td><input type="number" v-model.number="player.balance" /></td>
-          <td><button @click="savePlayer(player)">保存</button></td>
-          <td>{{ player.status }}</td>
-          <td>
-            <button @click="openResult(player, '闲')">闲</button>
-            <button @click="openResult(player, '和')">和</button>
-            <button @click="openResult(player, '庄')">庄</button>
-          </td>
-          <td><button @click="nextRound(player)">开始下一轮</button></td>
-        </tr>
-      </tbody>
-    </table>
 
-    <h2>开奖记录</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>玩家ID</th>
-          <th>选项</th>
-          <th>金额</th>
-          <th>结果</th>
-          <th>时间</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="record in records" :key="record._id">
-          <td>{{ record.playerId }}</td>
-          <td>{{ record.option }}</td>
-          <td>{{ record.amount }}</td>
-          <td>{{ record.result }}</td>
-          <td>{{ new Date(record.createdAt).toLocaleString() }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+<div class="admin-container">
+
+<h1>玩家管理</h1>
+
+
+<!-- 新增玩家 -->
+
+<div class="add-box">
+
+<input 
+v-model="newName"
+placeholder="玩家名称"
+/>
+
+<input
+type="number"
+v-model.number="newBalance"
+placeholder="初始余额"
+/>
+
+
+<button @click="addPlayer">
+新增玩家
+</button>
+
+
+</div>
+
+
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>ID</th>
+
+<th>名称</th>
+
+<th>余额</th>
+
+<th>玩家链接</th>
+
+<th>操作</th>
+
+<th>状态</th>
+
+<th>开奖设置</th>
+
+<th>下一轮</th>
+
+</tr>
+
+</thead>
+
+
+<tbody>
+
+
+<tr v-for="p in players" :key="p.id">
+
+
+<td>
+{{p.id}}
+</td>
+
+
+<td>
+
+<input v-model="p.name"/>
+
+</td>
+
+
+
+<td>
+
+<input
+type="number"
+v-model.number="p.balance"
+/>
+
+</td>
+
+
+
+<td>
+
+<a
+:href="frontUrl+'/player/'+p.id"
+target="_blank"
+>
+
+打开玩家
+
+</a>
+
+
+</td>
+
+
+
+<td>
+
+<button @click="savePlayer(p)">
+保存
+</button>
+
+
+</td>
+
+
+
+<td>
+
+{{p.status}}
+
+</td>
+
+
+
+<td>
+
+
+<button @click="openResult('闲')">
+闲
+</button>
+
+
+<button @click="openResult('和')">
+和
+</button>
+
+
+<button @click="openResult('庄')">
+庄
+</button>
+
+
+
+</td>
+
+
+
+<td>
+
+
+<button @click="nextRound">
+
+开始下一轮
+
+</button>
+
+
+
+</td>
+
+
+</tr>
+
+
+</tbody>
+
+
+</table>
+
+
+
+
+<h1>
+
+开奖记录
+
+</h1>
+
+
+
+<input
+v-model="filterId"
+placeholder="筛选玩家ID"
+/>
+
+
+
+<table>
+
+
+<thead>
+
+<tr>
+
+<th>
+玩家ID
+</th>
+
+
+<th>
+选项
+</th>
+
+
+<th>
+金额
+</th>
+
+
+<th>
+结果
+</th>
+
+
+<th>
+时间
+</th>
+
+
+</tr>
+
+</thead>
+
+
+
+<tbody>
+
+
+<tr
+v-for="r in filterRecords"
+:key="r._id"
+>
+
+
+<td>
+{{r.playerId}}
+</td>
+
+
+<td>
+{{r.option}}
+</td>
+
+
+<td>
+{{r.amount}}
+</td>
+
+
+<td>
+{{r.result}}
+</td>
+
+
+<td>
+
+{{new Date(r.createdAt).toLocaleString()}}
+
+</td>
+
+
+</tr>
+
+
+</tbody>
+
+
+</table>
+
+
+
+</div>
+
+
 </template>
 
-<script>
-import axios from "axios";
 
-export default {
-  name: "AdminView",
-  data() {
-    return {
-      players: [],
-      records: [],
-      apiBase: "https://demo-game-3.onrender.com", // 修改为你后端地址
-    };
-  },
-  methods: {
-    async fetchPlayers() {
-      const res = await axios.get(`${this.apiBase}/api/players`);
-      this.players = res.data;
-    },
-    async fetchRecords() {
-      const res = await axios.get(`${this.apiBase}/api/records`);
-      this.records = res.data;
-    },
-    async savePlayer(player) {
-      await axios.post(`${this.apiBase}/admin/update-player`, player);
-      this.fetchPlayers();
-    },
-    async openResult(player, result) {
-      await axios.post(`${this.apiBase}/admin/open`, { result });
-      this.fetchPlayers();
-      this.fetchRecords();
-    },
-    async nextRound(player) {
-      await axios.post(`${this.apiBase}/admin/next`);
-      this.fetchPlayers();
-      this.fetchRecords();
-    },
-  },
-  mounted() {
-    this.fetchPlayers();
-    this.fetchRecords();
-  },
-};
+
+<script setup>
+
+
+import {
+ref,
+computed,
+onMounted
+}
+from "vue"
+
+
+import axios from "axios"
+
+
+
+const api="https://demo-game-3.onrender.com"
+
+
+
+const frontUrl=
+"https://demo-game-2.onrender.com"
+
+
+
+const players=ref([])
+
+const records=ref([])
+
+
+
+const newName=ref("")
+
+const newBalance=ref(1000)
+
+
+const filterId=ref("")
+
+
+
+
+
+async function load(){
+
+
+let p=
+await axios.get(
+api+"/api/players"
+)
+
+
+players.value=p.data
+
+
+
+let r=
+await axios.get(
+api+"/api/records"
+)
+
+
+records.value=r.data
+
+
+}
+
+
+
+
+async function addPlayer(){
+
+
+await axios.post(
+api+"/admin/create-player",
+{
+
+
+name:newName.value,
+
+balance:newBalance.value
+
+
+})
+
+
+newName.value=""
+
+
+newBalance.value=1000
+
+
+load()
+
+
+
+}
+
+
+
+
+
+async function savePlayer(player){
+
+
+await axios.post(
+
+api+"/admin/update-player",
+
+player
+
+)
+
+
+load()
+
+
+}
+
+
+
+
+
+async function openResult(result){
+
+
+await axios.post(
+
+api+"/admin/open",
+
+{
+result
+}
+
+)
+
+
+load()
+
+
+}
+
+
+
+
+
+async function nextRound(){
+
+
+await axios.post(
+
+api+"/admin/next"
+
+)
+
+
+load()
+
+
+}
+
+
+
+
+
+
+const filterRecords=
+computed(()=>{
+
+
+if(!filterId.value)
+
+return records.value
+
+
+
+return records.value.filter(
+
+r=>
+r.playerId.includes(filterId.value)
+
+)
+
+
+})
+
+
+
+
+onMounted(load)
+
+
+
 </script>
 
-<style>
-.admin-container {
-  padding: 20px;
+
+
+<style scoped>
+
+
+.admin-container{
+
+padding:30px;
+
 }
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 30px;
+
+
+
+table{
+
+width:100%;
+
+border-collapse:collapse;
+
+margin-bottom:40px;
+
 }
-th, td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: center;
+
+
+
+th,td{
+
+border:1px solid #ccc;
+
+padding:10px;
+
+text-align:center;
+
 }
-button {
-  margin: 2px;
-  padding: 4px 8px;
+
+
+
+button{
+
+padding:6px 12px;
+
+margin:3px;
+
 }
+
+
+
+.add-box{
+
+margin-bottom:20px;
+
+}
+
+
 </style>
