@@ -39,7 +39,7 @@ origin:"*"
 
 
 mongoose.connect(
-"你的MongoDB连接地址"
+"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/?appName=Cluster0"
 )
 .then(()=>console.log("MongoDB connected"))
 .catch(err=>console.log(err));
