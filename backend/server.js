@@ -1,59 +1,37 @@
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
-const { Server } = require("socket.io");
-const mongoose = require("mongoose");
-const { v4: uuid } = require("uuid");
+const {Server}=require("socket.io");
+const mongoose=require("mongoose");
+const {v4:uuid}=require("uuid");
 
 
-const app = express();
+const app=express();
 
 
-// =========================
+// ========================
 // CORS
-// =========================
-
-const allowOrigins = [
-  "https://demo-game-2.onrender.com",
-  "https://demo-game-3.onrender.com"
-];
+// ========================
 
 
-app.use(
-  cors({
-    origin: function(origin, callback){
+app.use(cors({
 
-      if(!origin){
-        return callback(null,true);
-      }
+origin:[
+"https://demo-game-2.onrender.com",
+"https://demo-game-3.onrender.com"
+],
 
+methods:[
+"GET",
+"POST",
+"PUT",
+"DELETE",
+"OPTIONS"
+],
 
-      if(allowOrigins.includes(origin)){
-        return callback(null,true);
-      }
+credentials:true
 
-
-      return callback(null,false);
-
-    },
-
-    methods:[
-      "GET",
-      "POST",
-      "PUT",
-      "DELETE",
-      "OPTIONS"
-    ],
-
-    allowedHeaders:[
-      "Content-Type"
-    ],
-
-    credentials:true
-
-  })
-);
-
+}));
 
 
 app.options("*",cors());
@@ -62,56 +40,46 @@ app.use(express.json());
 
 
 
-// =========================
-// SERVER
-// =========================
-
-
-const server = http.createServer(app);
+const server=http.createServer(app);
 
 
 
-const io = new Server(server,{
+const io=new Server(server,{
 
-  cors:{
-
-    origin:allowOrigins,
-
-    methods:[
-      "GET",
-      "POST"
-    ]
-
-  }
+cors:{
+origin:"*"
+}
 
 });
 
 
 
 
-// =========================
+
+// ========================
 // MongoDB
-// =========================
+// ========================
 
 
-mongoose.connect(
-process.env.MONGO_URI
-)
+const MONGO_URL =
+process.env.MONGO_URL ||
+"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/game";
+
+
+
+mongoose.connect(MONGO_URL)
 
 .then(()=>{
 
- console.log(
- "MongoDB connected"
- );
+console.log("MongoDB connected");
+
+init();
 
 })
 
-
 .catch(err=>{
 
- console.log(
- err
- );
+console.log("Mongo Error:",err);
 
 });
 
@@ -119,103 +87,87 @@ process.env.MONGO_URI
 
 
 
-// =========================
+// ========================
 // Models
-// =========================
+// ========================
 
 
-const PlayerSchema =
-new mongoose.Schema({
 
- id:{
-  type:String,
-  default:()=>uuid()
- },
+const PlayerSchema=new mongoose.Schema({
 
+id:{
+type:String,
+default:()=>uuid()
+},
 
- name:String,
+name:String,
 
+balance:{
+type:Number,
+default:0
+},
 
- balance:{
-  type:Number,
-  default:0
- },
-
-
- status:{
-  type:String,
-  default:"在线"
- }
-
+status:{
+type:String,
+default:"在线"
+}
 
 });
 
 
 
 
+const RecordSchema=new mongoose.Schema({
 
-const RecordSchema =
-new mongoose.Schema({
+playerId:String,
 
+playerName:String,
 
- playerId:String,
+option:String,
 
-
- playerName:String,
-
-
- option:String,
+amount:Number,
 
 
- amount:Number,
+result:{
+type:String,
+default:"等待开奖"
+},
 
 
- result:{
-  type:String,
-  default:"等待开奖"
- },
-
-
- time:{
-  type:Date,
-  default:Date.now
- }
-
+time:{
+type:Date,
+default:Date.now
+}
 
 });
 
 
 
 
+const GameSchema=new mongoose.Schema({
+
+result:{
+type:String,
+default:"等待开奖"
+},
 
 
-
-const GameSchema =
-new mongoose.Schema({
-
-
- result:{
-  type:String,
-  default:"等待开奖"
- },
+betting:{
+type:Boolean,
+default:true
+},
 
 
- betting:{
-  type:Boolean,
-  default:true
- },
+countdown:{
+type:Number,
+default:20
+},
 
 
- countdown:{
-  type:Number,
-  default:20
- },
-
-
- round:{
-  type:Number,
-  default:1
- }
+round:{
+type:Number,
+default:1
+}
 
 
 });
@@ -231,13 +183,11 @@ PlayerSchema
 );
 
 
-
 const Record =
 mongoose.model(
 "Record",
 RecordSchema
 );
-
 
 
 const Game =
@@ -250,85 +200,97 @@ GameSchema
 
 
 
-let game;
+let game=null;
 
 
 
-async function initGame(){
 
 
- game =
- await Game.findOne();
+// ========================
+// 初始化
+// ========================
 
 
- if(!game){
+async function init(){
 
-  game =
-  await Game.create({});
 
- }
+game=await Game.findOne();
+
+
+if(!game){
+
+game=await Game.create({});
+
+}
+
+
+console.log("Game ready");
 
 
 }
 
 
 
-initGame();
 
 
 
 
-
-
-// =========================
-// Broadcast
-// =========================
+// ========================
+// 广播
+// ========================
 
 
 async function broadcast(){
 
 
- const players =
- await Player.find();
+if(!game)return;
 
 
 
- const records =
- await Record.find()
- .sort({
-  time:-1
- });
+const players=
+await Player.find();
+
+
+const records=
+await Record.find()
+.sort({
+time:-1
+});
 
 
 
- io.emit(
- "update",
- {
+io.emit(
 
-  players,
+"update",
 
-  records,
+{
 
-  game
+players,
 
- }
+records,
 
- );
-
+game
 
 }
 
+
+);
+
+
+}
 
 
 
 
 
 io.on(
+
 "connection",
+
 socket=>{
 
 
- broadcast();
+broadcast();
 
 
 });
@@ -338,14 +300,15 @@ socket=>{
 
 
 
-// =========================
-// HOME
-// =========================
 
 
-app.get(
-"/",
-(req,res)=>{
+
+// ========================
+// 首页
+// ========================
+
+
+app.get("/",(req,res)=>{
 
 
 res.send(
@@ -360,12 +323,16 @@ res.send(
 
 
 
-// =========================
-// Players
-// =========================
+
+
+
+// ========================
+// 玩家列表
+// ========================
 
 
 app.get(
+
 "/api/players",
 
 async(req,res)=>{
@@ -387,43 +354,43 @@ res.json(data);
 
 
 
-// =========================
-// Single Player
-// =========================
+
+// ========================
+// 玩家
+// ========================
+
 
 
 app.get(
+
 "/api/player/:id",
 
 async(req,res)=>{
 
 
-const player =
+const p=
+
 await Player.findOne({
 
- id:req.params.id
+id:req.params.id
 
 });
 
 
 
-if(!player){
+res.json(
 
-return res.json({
+p ||
 
- id:req.params.id,
+{
 
- balance:0
+id:req.params.id,
 
-});
-
+balance:0
 
 }
 
-
-
-res.json(player);
-
+);
 
 
 });
@@ -435,26 +402,31 @@ res.json(player);
 
 
 
-// =========================
-// Records
-// =========================
+
+// ========================
+// 玩家记录
+// ========================
+
 
 
 app.get(
+
 "/api/records/:playerId",
 
 async(req,res)=>{
 
 
 const data =
+
 await Record.find({
 
- playerId:req.params.playerId
+playerId:req.params.playerId
 
 })
+
 .sort({
 
- time:-1
+time:-1
 
 });
 
@@ -471,12 +443,15 @@ res.json(data);
 
 
 
-// =========================
-// Admin Create / Update Player
-// =========================
+
+// ========================
+// 创建玩家
+// ========================
+
 
 
 app.post(
+
 "/admin/update-player",
 
 async(req,res)=>{
@@ -490,13 +465,13 @@ name,
 
 balance
 
-
 }=req.body;
 
 
 
 
 let player =
+
 await Player.findOne({
 
 id
@@ -513,27 +488,23 @@ if(!player){
 player =
 await Player.create({
 
-id,
+id:id || uuid(),
 
 name,
 
-balance:Number(balance)
+balance:Number(balance)||0
+
 
 });
 
 
-}
-
-else{
+}else{
 
 
-player.name =
-name;
+player.name=name;
 
-
-player.balance =
-Number(balance);
-
+player.balance=
+Number(balance)||0;
 
 
 await player.save();
@@ -547,14 +518,12 @@ await player.save();
 await broadcast();
 
 
-
 res.json({
 
 success:true,
 
 player
 
-
 });
 
 
@@ -567,12 +536,14 @@ player
 
 
 
-// =========================
-// Bet
-// =========================
+
+// ========================
+// 投注
+// ========================
 
 
 app.post(
+
 "/api/bets",
 
 async(req,res)=>{
@@ -586,13 +557,13 @@ option,
 
 amount
 
-
 }=req.body;
 
 
 
 
-const player =
+const player=
+
 await Player.findOne({
 
 id:playerId
@@ -601,31 +572,19 @@ id:playerId
 
 
 
-
-
-if(!player){
+if(!player)
 
 return res.json({
 
-success:false,
-
-msg:"玩家不存在"
+success:false
 
 });
 
 
-}
 
 
 
-
-
-if(
-player.balance <
-Number(amount)
-
-){
-
+if(player.balance < amount)
 
 return res.json({
 
@@ -636,16 +595,10 @@ msg:"余额不足"
 });
 
 
-}
 
 
 
-
-
-
-player.balance -=
-Number(amount);
-
+player.balance -= Number(amount);
 
 
 await player.save();
@@ -653,9 +606,7 @@ await player.save();
 
 
 
-
 await Record.create({
-
 
 playerId,
 
@@ -665,19 +616,14 @@ option,
 
 amount:Number(amount),
 
-
 result:"等待开奖"
-
 
 });
 
 
 
 
-
-
 await broadcast();
-
 
 
 
@@ -700,12 +646,14 @@ balance:player.balance
 
 
 
-// =========================
-// Open Result
-// =========================
+
+// ========================
+// 开奖
+// ========================
 
 
 app.post(
+
 "/admin/open",
 
 async(req,res)=>{
@@ -720,12 +668,10 @@ result
 
 
 
-game.result =
-result;
+game.result=result;
 
+game.betting=false;
 
-game.betting =
-false;
 
 
 await game.save();
@@ -734,13 +680,17 @@ await game.save();
 
 
 
-const odds = {
+const odds={
+
 
 "闲":1,
 
+
 "和":8,
 
+
 "庄":0.95
+
 
 };
 
@@ -748,7 +698,8 @@ const odds = {
 
 
 
-const records =
+const records=
+
 await Record.find({
 
 result:"等待开奖"
@@ -759,14 +710,12 @@ result:"等待开奖"
 
 
 
-
-for(
-let r of records
-){
+for(let r of records){
 
 
 
-const player =
+const player=
+
 await Player.findOne({
 
 id:r.playerId
@@ -775,29 +724,27 @@ id:r.playerId
 
 
 
-
-
-if(
-r.option === result
-){
+if(r.option===result){
 
 
 
 const win =
 
 Number(r.amount)
+
 +
-(
-Number(r.amount)
-*
-Number(odds[result])
-);
+
+Number(r.amount)*
+
+Number(odds[result]);
 
 
 
 
-r.result =
+
+r.result=
 "中奖 +" + win;
+
 
 
 
@@ -813,17 +760,14 @@ await player.save();
 }
 
 
-}
 
-else{
+}else{
 
 
-r.result =
-"未中奖";
+r.result="未中奖";
 
 
 }
-
 
 
 
@@ -836,7 +780,6 @@ await r.save();
 
 
 
-
 await broadcast();
 
 
@@ -848,6 +791,7 @@ success:true
 });
 
 
+
 });
 
 
@@ -857,36 +801,26 @@ success:true
 
 
 
-// =========================
-// Next Round
-// =========================
+
+// ========================
+// 下一轮
+// ========================
 
 
 app.post(
+
 "/admin/next",
 
 async(req,res)=>{
 
 
-const {
-
-playerId
-
-}=req.body;
+game.result="等待开奖";
 
 
+game.betting=true;
 
 
-game.result =
-"等待开奖";
-
-
-game.betting =
-true;
-
-
-game.countdown =
-20;
+game.countdown=20;
 
 
 game.round++;
@@ -897,26 +831,17 @@ await game.save();
 
 
 
-
-
 io.emit(
-"player-next",
-{
 
-playerId,
+"player-next",
 
 game
 
-
-});
-
-
+);
 
 
 
 await broadcast();
-
-
 
 
 
@@ -927,6 +852,7 @@ success:true
 });
 
 
+
 });
 
 
@@ -937,16 +863,50 @@ success:true
 
 
 
+// ========================
+// 全部记录
+// ========================
+
+
+app.get(
+
+"/api/records",
+
+async(req,res)=>{
+
+
+const data=
+
+await Record.find()
+
+.sort({
+
+time:-1
+
+});
+
+
+res.json(data);
+
+
+});
+
+
+
+
+
+
+
 server.listen(
 
-3000,
+process.env.PORT || 3000,
 
 ()=>{
 
 
 console.log(
 
-"Server running on port 3000"
+"Server running"
 
 );
 
