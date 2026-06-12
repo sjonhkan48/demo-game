@@ -1,28 +1,36 @@
 <template>
 
+
 <div class="admin-container">
 
-<h1>玩家管理</h1>
+
+<h2>
+玩家管理
+</h2>
 
 
-<!-- 新增玩家 -->
 
-<div class="add-box">
+<div class="create">
 
-<input 
+
+<input
 v-model="newName"
 placeholder="玩家名称"
 />
 
+
 <input
 type="number"
 v-model.number="newBalance"
-placeholder="初始余额"
 />
 
 
-<button @click="addPlayer">
+<button
+@click="createPlayer"
+>
+
 新增玩家
+
 </button>
 
 
@@ -30,7 +38,10 @@ placeholder="初始余额"
 
 
 
+
+
 <table>
+
 
 <thead>
 
@@ -42,9 +53,9 @@ placeholder="初始余额"
 
 <th>余额</th>
 
-<th>玩家链接</th>
+<th>保存</th>
 
-<th>操作</th>
+<th>玩家链接</th>
 
 <th>状态</th>
 
@@ -52,25 +63,27 @@ placeholder="初始余额"
 
 <th>下一轮</th>
 
+
 </tr>
 
+
 </thead>
+
+
 
 
 <tbody>
 
 
-<tr v-for="p in players" :key="p.id">
+<tr
+v-for="p in players"
+:key="p.id"
+>
 
 
 <td>
+
 {{p.id}}
-</td>
-
-
-<td>
-
-<input v-model="p.name"/>
 
 </td>
 
@@ -79,8 +92,7 @@ placeholder="初始余额"
 <td>
 
 <input
-type="number"
-v-model.number="p.balance"
+v-model="p.name"
 />
 
 </td>
@@ -89,28 +101,48 @@ v-model.number="p.balance"
 
 <td>
 
+
+<input
+type="number"
+v-model.number="p.balance"
+/>
+
+
+</td>
+
+
+
+
+<td>
+
+<button
+@click="save(p)"
+>
+
+保存
+
+</button>
+
+</td>
+
+
+
+
+<td>
+
+
 <a
-:href="frontUrl+'/player/'+p.id"
+:href="link(p)"
 target="_blank"
 >
 
-打开玩家
+玩家入口
 
 </a>
 
 
 </td>
 
-
-
-<td>
-
-<button @click="savePlayer(p)">
-保存
-</button>
-
-
-</td>
 
 
 
@@ -122,41 +154,50 @@ target="_blank"
 
 
 
+
 <td>
 
 
-<button @click="openResult('闲')">
+<button
+@click="open('闲')"
+>
 闲
 </button>
 
 
-<button @click="openResult('和')">
+<button
+@click="open('和')"
+>
 和
 </button>
 
 
-<button @click="openResult('庄')">
+<button
+@click="open('庄')"
+>
 庄
 </button>
-
 
 
 </td>
 
 
 
+
 <td>
 
 
-<button @click="nextRound">
+<button
+@click="next"
+>
 
 开始下一轮
 
 </button>
 
 
-
 </td>
+
 
 
 </tr>
@@ -170,18 +211,20 @@ target="_blank"
 
 
 
-<h1>
 
+<h2>
 开奖记录
+</h2>
 
-</h1>
 
 
 
 <input
-v-model="filterId"
-placeholder="筛选玩家ID"
+v-model="search"
+placeholder="玩家ID筛选"
 />
+
+
 
 
 
@@ -196,21 +239,17 @@ placeholder="筛选玩家ID"
 玩家ID
 </th>
 
-
 <th>
 选项
 </th>
-
 
 <th>
 金额
 </th>
 
-
 <th>
 结果
 </th>
-
 
 <th>
 时间
@@ -219,7 +258,9 @@ placeholder="筛选玩家ID"
 
 </tr>
 
+
 </thead>
+
 
 
 
@@ -252,11 +293,13 @@ v-for="r in filterRecords"
 </td>
 
 
+
 <td>
 
 {{new Date(r.createdAt).toLocaleString()}}
 
 </td>
+
 
 
 </tr>
@@ -276,6 +319,7 @@ v-for="r in filterRecords"
 
 
 
+
 <script setup>
 
 
@@ -291,16 +335,18 @@ import axios from "axios"
 
 
 
-const api="https://demo-game-3.onrender.com"
+const api=
+"https://demo-game-3.onrender.com"
 
 
 
-const frontUrl=
+const front=
 "https://demo-game-2.onrender.com"
 
 
 
 const players=ref([])
+
 
 const records=ref([])
 
@@ -308,10 +354,13 @@ const records=ref([])
 
 const newName=ref("")
 
+
 const newBalance=ref(1000)
 
 
-const filterId=ref("")
+
+const search=ref("")
+
 
 
 
@@ -320,23 +369,22 @@ const filterId=ref("")
 async function load(){
 
 
-let p=
+players.value=
+(
 await axios.get(
 api+"/api/players"
 )
-
-
-players.value=p.data
+).data
 
 
 
-let r=
+records.value=
+(
 await axios.get(
 api+"/api/records"
 )
+).data
 
-
-records.value=r.data
 
 
 }
@@ -344,30 +392,40 @@ records.value=r.data
 
 
 
-async function addPlayer(){
+
+
+async function createPlayer(){
+
 
 
 await axios.post(
+
 api+"/admin/create-player",
+
 {
 
 
 name:newName.value,
 
+
 balance:newBalance.value
 
 
-})
+}
 
 
-newName.value=""
+);
 
 
-newBalance.value=1000
+
+newName.value="";
 
 
-load()
+newBalance.value=1000;
 
+
+
+load();
 
 
 }
@@ -376,19 +434,22 @@ load()
 
 
 
-async function savePlayer(player){
+
+async function save(p){
+
 
 
 await axios.post(
 
 api+"/admin/update-player",
 
-player
+p
 
-)
+);
 
 
-load()
+
+load();
 
 
 }
@@ -397,7 +458,8 @@ load()
 
 
 
-async function openResult(result){
+
+async function open(result){
 
 
 await axios.post(
@@ -408,10 +470,11 @@ api+"/admin/open",
 result
 }
 
-)
+);
 
 
-load()
+
+load();
 
 
 }
@@ -420,17 +483,33 @@ load()
 
 
 
-async function nextRound(){
+
+async function next(){
 
 
 await axios.post(
 
 api+"/admin/next"
 
-)
+);
 
 
-load()
+load();
+
+
+}
+
+
+
+
+
+function link(p){
+
+
+return front+
+"/player/"
++
+p.id;
 
 
 }
@@ -444,21 +523,22 @@ const filterRecords=
 computed(()=>{
 
 
-if(!filterId.value)
+if(!search.value)
 
-return records.value
+return records.value;
 
 
 
 return records.value.filter(
 
-r=>
-r.playerId.includes(filterId.value)
+x=>
+x.playerId.includes(search.value)
 
-)
+);
 
 
-})
+});
+
 
 
 
@@ -471,12 +551,14 @@ onMounted(load)
 
 
 
+
+
 <style scoped>
 
 
 .admin-container{
 
-padding:30px;
+padding:20px;
 
 }
 
@@ -488,13 +570,12 @@ width:100%;
 
 border-collapse:collapse;
 
-margin-bottom:40px;
+margin-top:20px;
 
 }
 
 
-
-th,td{
+td,th{
 
 border:1px solid #ccc;
 
@@ -510,13 +591,11 @@ button{
 
 padding:6px 12px;
 
-margin:3px;
-
 }
 
 
 
-.add-box{
+.create{
 
 margin-bottom:20px;
 
