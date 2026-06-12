@@ -244,50 +244,52 @@ v-for="item in records"
 
 
 import {
-
 reactive,
-
 ref,
-
 onMounted
-
 }
-
 from "vue"
-
 
 
 import axios from "axios"
 
 
-
-import {useRoute}
-
-from "vue-router"
+import {io}
+from "socket.io-client"
 
 
 
 
-
-const route=useRoute()
-
+// 自动读取玩家ID
 
 
-const apiBase="https://demo-game-3.onrender.com"
-
-
-
-const playerId=route.params.id
+const playerId =
+location.pathname.split("/").pop()
 
 
 
+const apiBase=
+
+"https://demo-game-3.onrender.com"
 
 
-const player=reactive({
+
+
+
+const socket =
+io(apiBase)
+
+
+
+
+
+const player =
+reactive({
 
 id:playerId,
 
 balance:0
+
 
 })
 
@@ -295,7 +297,8 @@ balance:0
 
 
 
-const game=reactive({
+const game =
+reactive({
 
 result:"等待开奖"
 
@@ -305,22 +308,18 @@ result:"等待开奖"
 
 
 
-
-const countdown=ref(20)
-
-
-
-const countdownText=ref(
-
-"下注倒计时 20 秒"
-
-)
+const countdown =
+ref(20)
 
 
 
-const canBet=ref(true)
+const countdownText =
+ref("下注倒计时 20 秒")
 
 
+
+const canBet =
+ref(true)
 
 
 
@@ -329,44 +328,16 @@ const canBet=ref(true)
 const options=[
 
 
-{
-
-name:"闲",
-
-color:"#1748a5",
-
-odds:1
+{name:"闲",color:"#1748a5",odds:1},
 
 
-},
+{name:"和",color:"#14853c",odds:8},
 
 
-{
-
-name:"和",
-
-color:"#14853c",
-
-odds:8
-
-
-},
-
-
-{
-
-name:"庄",
-
-color:"#b31319",
-
-odds:0.95
-
-
-}
+{name:"庄",color:"#b31319",odds:0.95}
 
 
 ]
-
 
 
 
@@ -377,18 +348,23 @@ const chips=[10,50,100,500,1000]
 
 
 
-
-const selectedChip=ref(0)
-
-
-const customBet=ref(0)
-
-
-const currentOption=ref("")
+const selectedChip =
+ref(0)
 
 
 
-const records=ref([])
+const customBet =
+ref(0)
+
+
+
+const currentOption =
+ref("")
+
+
+
+const records =
+ref([])
 
 
 
@@ -397,25 +373,28 @@ const records=ref([])
 
 
 
+//读取玩家余额
 
 
-// 获取玩家余额
+async function loadPlayer(){
 
 
-async function getPlayer(){
-
-
-const res=
+let res=
 
 await axios.get(
 
-`${apiBase}/api/player/${playerId}`
+apiBase+
+
+"/api/player/"+playerId
 
 )
 
 
 
-player.balance=res.data.balance
+player.balance=
+
+res.data.balance
+
 
 
 }
@@ -424,21 +403,19 @@ player.balance=res.data.balance
 
 
 
+//读取玩家记录
 
 
+async function loadRecords(){
 
 
-// 获取自己的投注记录
-
-
-async function getRecords(){
-
-
-const res=
+let res=
 
 await axios.get(
 
-`${apiBase}/api/records/${playerId}`
+apiBase+
+
+"/api/records/"+playerId
 
 )
 
@@ -447,6 +424,7 @@ await axios.get(
 records.value=res.data
 
 
+
 }
 
 
@@ -457,25 +435,19 @@ records.value=res.data
 
 
 
-// 选择筹码
-
-
-function selectChip(chip){
+function selectChip(v){
 
 
 if(!canBet.value)return
 
 
-selectedChip.value=chip
+selectedChip.value=v;
 
 
-customBet.value=0
+customBet.value=0;
 
 
 }
-
-
-
 
 
 
@@ -501,34 +473,27 @@ currentOption.value=name
 
 
 
-
-
-//下注
-
-
 async function placeBet(){
-
-
-
-if(!currentOption.value){
-
-
-alert("请选择下注区域")
-
-return
-
-
-}
-
-
 
 
 
 let amount=
 
-customBet.value || selectedChip.value
+customBet.value ||
+
+selectedChip.value
 
 
+
+
+
+if(!currentOption.value){
+
+alert("请选择下注区域")
+
+return
+
+}
 
 
 
@@ -536,41 +501,22 @@ customBet.value || selectedChip.value
 
 if(!amount){
 
-
 alert("请选择筹码")
 
 return
 
-
 }
 
 
 
 
 
-if(amount>player.balance){
 
-
-alert("余额不足")
-
-return
-
-
-}
-
-
-
-
-
-try{
-
-
-const res=
+let res=
 
 await axios.post(
 
-`${apiBase}/api/bets`,
-
+apiBase+"/api/bets",
 
 {
 
@@ -584,12 +530,11 @@ option:currentOption.value,
 amount
 
 
+
 }
 
 
-
 )
-
 
 
 
@@ -599,35 +544,11 @@ if(res.data.success){
 
 
 
-// 后端返回最新余额
-
-player.balance=
-
-res.data.balance
+player.balance=res.data.balance;
 
 
 
-
-
-// 立即显示记录
-
-
-records.value.unshift(
-
-res.data.record
-
-)
-
-
-
-
-
-
-selectedChip.value=0
-
-customBet.value=0
-
-currentOption.value=""
+await loadRecords();
 
 
 
@@ -635,11 +556,16 @@ currentOption.value=""
 
 
 
-}catch(e){
 
-console.log(e)
 
-}
+
+selectedChip.value=0;
+
+
+customBet.value=0;
+
+
+currentOption.value="";
 
 
 
@@ -651,30 +577,25 @@ console.log(e)
 
 
 
-
-
-// 倒计时
 
 
 function startCountdown(){
 
 
-
-countdown.value=20
-
-
-canBet.value=true
+clearInterval(window.timer)
 
 
 
-const timer=setInterval(()=>{
+window.timer=
+
+setInterval(()=>{
 
 
 
 if(countdown.value>0){
 
 
-countdown.value--
+countdown.value--;
 
 
 countdownText.value=
@@ -683,25 +604,20 @@ countdownText.value=
 
 +countdown.value
 
-+" 秒"
++" 秒";
 
 
 
 }else{
 
 
-canBet.value=false
+canBet.value=false;
 
 
-countdownText.value="停止下注"
-
-
-
-clearInterval(timer)
+countdownText.value="停止下注";
 
 
 }
-
 
 
 },1000)
@@ -718,133 +634,17 @@ clearInterval(timer)
 
 
 
+socket.on(
+"update",
 
+(data)=>{
 
-//监听后台状态
 
 
-function syncGame(){
+game.result=
 
+data.game.result;
 
-
-setInterval(async()=>{
-
-
-await getPlayer()
-
-
-await getRecords()
-
-
-
-},2000)
-
-
-
-}
-
-
-
-
-
-
-
-
-
-
-
-//监听下一轮
-
-
-function checkRound(){
-
-
-
-setInterval(async()=>{
-
-
-
-const res=
-
-await axios.get(
-
-`${apiBase}/api/game/status`
-
-)
-
-
-
-
-
-
-if(res.data.newRound){
-
-
-
-game.result="等待开奖"
-
-
-
-startCountdown()
-
-
-
-selectedChip.value=0
-
-
-customBet.value=0
-
-
-currentOption.value=""
-
-
-
-}
-
-
-
-if(res.data.result){
-
-
-game.result=res.data.result
-
-
-}
-
-
-
-
-
-},2000)
-
-
-
-}
-
-
-
-
-
-
-
-
-onMounted(()=>{
-
-
-getPlayer()
-
-
-getRecords()
-
-
-startCountdown()
-
-
-
-syncGame()
-
-
-checkRound()
 
 
 
@@ -854,9 +654,108 @@ checkRound()
 
 
 
+
+
+
+
+// 下一轮同步
+
+
+socket.on(
+
+"player-next",
+
+(data)=>{
+
+
+
+if(
+
+!data.playerId ||
+
+data.playerId===playerId
+
+){
+
+
+
+countdown.value=20;
+
+
+canBet.value=true;
+
+
+countdownText.value=
+
+"下注倒计时 20 秒";
+
+
+
+startCountdown();
+
+
+
+}
+
+
+
+
+})
+
+
+
+
+
+
+
+
+
+// 开奖刷新
+
+
+socket.on(
+
+"update",
+
+async()=>{
+
+
+await loadPlayer();
+
+
+await loadRecords();
+
+
+})
+
+
+
+
+
+
+
+
+
+
+
+onMounted(async()=>{
+
+
+await loadPlayer();
+
+
+await loadRecords();
+
+
+startCountdown();
+
+
+})
+
+
+
+
 </script>
-
-
 
 
 
