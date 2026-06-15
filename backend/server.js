@@ -6,81 +6,91 @@ const mongoose = require("mongoose");
 const { v4: uuid } = require("uuid");
 
 const app = express();
-const server = http.createServer(app);
 
 // =======================
-// CORS（生产稳定版）
+// CORS（稳定版）
 // =======================
-const allowOrigins = [
-    "https://demo-game-2.onrender.com",
-    "https://demo-game-3.onrender.com"
-];
-
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        return callback(null, true); // 避免 Render + mobile 出问题
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    origin: [
+        "https://demo-game-2.onrender.com",
+        "https://demo-game-3.onrender.com"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true
 }));
 
 app.options("*", cors());
 app.use(express.json());
 
-// =======================
-// Socket
-// =======================
+const server = http.createServer(app);
+
 const io = new Server(server, {
     cors: { origin: "*" }
 });
 
 // =======================
-// Mongo
+// Mongo（修复双变量）
 // =======================
-const MONGO_URL = process.env.MONGO_URL;
+const MONGO_URL =
+    process.env.MONGO_URL ||
+    process.env.MONGODB_URI;
 
 if (!MONGO_URL) {
-    console.error("❌ MONGO_URL missing");
+    console.error("❌ MongoDB URL 未配置");
 }
 
-mongoose.set("strictQuery", true);
+// =======================
+// Mongo连接
+// =======================
+let mongoReady = false;
 
-async function connectDB() {
+async function connectMongo() {
     try {
-        await mongoose.connect(MONGO_URL);
+        await mongoose.connect(MONGO_URL, {
+            serverSelectionTimeoutMS: 5000
+        });
+        mongoReady = true;
         console.log("✅ MongoDB connected");
+        await init();
     } catch (err) {
-        console.log("❌ Mongo error:", err.message);
-        setTimeout(connectDB, 5000);
+        console.error("❌ Mongo error:", err.message);
+        setTimeout(connectMongo, 5000);
     }
 }
-connectDB();
+
+connectMongo();
 
 // =======================
-// Schema
+// Schema（升级版）
 // =======================
+
+// 玩家（新增：密码 + 备注 + 房间）
 const PlayerSchema = new mongoose.Schema({
     id: { type: String, default: uuid },
     name: String,
     balance: { type: Number, default: 0 },
-    password: String,     // ⭐ 新增
-    remark: String        // ⭐ 新增
+
+    // 🔥 新增
+    password: { type: String },     // 4位数字
+    remark: { type: String },       // 后台备注
+    roomId: { type: String }        // 房间隔离
 });
 
+// 记录（新增余额快照）
 const RecordSchema = new mongoose.Schema({
     playerId: String,
     playerName: String,
     option: String,
     amount: Number,
     result: { type: String, default: "等待开奖" },
-    time: { type: Date, default: Date.now },
-    round: Number
+
+    // 🔥 新增
+    balanceAfter: Number,
+
+    time: { type: Date, default: Date.now }
 });
 
+// 游戏
 const GameSchema = new mongoose.Schema({
     result: { type: String, default: "等待开奖" },
     betting: { type: Boolean, default: true },
@@ -93,80 +103,117 @@ const Record = mongoose.model("Record", RecordSchema);
 const Game = mongoose.model("Game", GameSchema);
 
 // =======================
-// game state
+// 状态
 // =======================
 let game = null;
+let countdownTimer = null;
 
 // =======================
-// init
+// 初始化
 // =======================
 async function init() {
+    if (!mongoReady) return;
+
     game = await Game.findOne();
     if (!game) game = await Game.create({});
-    console.log("Game ready");
+
+    console.log("🎮 Game ready");
+
+    startCountdown();
 }
 
 // =======================
-// broadcast
+// 倒计时引擎（关键新增）
+// =======================
+function startCountdown() {
+    if (countdownTimer) clearInterval(countdownTimer);
+
+    countdownTimer = setInterval(async () => {
+        if (!game) return;
+
+        if (game.countdown > 0 && game.betting) {
+            game.countdown -= 1;
+            await game.save();
+            await broadcast();
+        }
+    }, 1000);
+}
+
+// =======================
+// broadcast（稳定版）
 // =======================
 async function broadcast() {
-    if (!game) return;
+    if (!mongoReady || !game) return;
 
     const players = await Player.find();
     const records = await Record.find().sort({ time: -1 });
 
-    io.emit("update", { players, records, game });
+    io.emit("update", {
+        players,
+        records,
+        game
+    });
 }
-
-// =======================
-// countdown engine（关键新增）
-// =======================
-setInterval(async () => {
-    if (!game) return;
-    if (!game.betting) return;
-
-    game.countdown -= 1;
-
-    if (game.countdown <= 0) {
-        game.countdown = 20;
-        game.round += 1;
-    }
-
-    await game.save();
-    io.emit("update", { game });
-}, 1000);
 
 // =======================
 // socket
 // =======================
 io.on("connection", (socket) => {
     broadcast();
+
+    // admin多人同步
+    socket.on("admin-sync", async () => {
+        broadcast();
+    });
 });
 
 // =======================
-// routes
+// health
 // =======================
 app.get("/", (req, res) => {
     res.send("GAME SERVER RUNNING");
 });
 
 // =======================
-// players
+// safe wrapper
 // =======================
-app.get("/api/players", async (req, res) => {
-    res.json(await Player.find());
-});
+const safe = (fn) => async (req, res) => {
+    try {
+        if (!mongoReady) {
+            return res.status(503).json({ error: "DB not ready" });
+        }
+        await fn(req, res);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "server error" });
+    }
+};
 
-app.get("/api/player/:id", async (req, res) => {
+// =======================
+// API（不改UI兼容）
+// =======================
+
+// 玩家列表
+app.get("/api/players", safe(async (req, res) => {
+    res.json(await Player.find());
+}));
+
+// 单玩家
+app.get("/api/player/:id", safe(async (req, res) => {
     const p = await Player.findOne({ id: req.params.id });
     res.json(p || { id: req.params.id, balance: 0 });
-});
+}));
+
+// 记录
+app.get("/api/records", safe(async (req, res) => {
+    res.json(await Record.find().sort({ time: -1 }));
+}));
 
 // =======================
-// create/update player（含密码）
+// 玩家创建/更新（带备注+密码）
 // =======================
-app.post("/admin/update-player", async (req, res) => {
-    const { id, name, balance, password, remark } = req.body;
+app.post("/admin/update-player", safe(async (req, res) => {
+    const { id, name, balance, remark, password } = req.body;
 
     let player = await Player.findOne({ id });
 
@@ -175,25 +222,25 @@ app.post("/admin/update-player", async (req, res) => {
             id: id || uuid(),
             name,
             balance: Number(balance || 0),
+            remark,
             password: password || String(Math.floor(1000 + Math.random() * 9000)),
-            remark: remark || ""
+            roomId: id || uuid()
         });
     } else {
         player.name = name;
         player.balance = Number(balance || 0);
-        player.password = password || player.password;
-        player.remark = remark || player.remark;
+        if (remark !== undefined) player.remark = remark;
         await player.save();
     }
 
     await broadcast();
     res.json({ success: true, player });
-});
+}));
 
 // =======================
-// bet
+// 下注（支持多笔）
 // =======================
-app.post("/api/bets", async (req, res) => {
+app.post("/api/bets", safe(async (req, res) => {
     const { playerId, option, amount } = req.body;
 
     const player = await Player.findOne({ id: playerId });
@@ -210,17 +257,17 @@ app.post("/api/bets", async (req, res) => {
         playerName: player.name,
         option,
         amount: Number(amount),
-        round: game?.round || 1
+        balanceAfter: player.balance
     });
 
     await broadcast();
-    res.json({ success: true, balance: player.balance });
-});
+    res.json({ success: true });
+}));
 
 // =======================
-// open
+// 开奖
 // =======================
-app.post("/admin/open", async (req, res) => {
+app.post("/admin/open", safe(async (req, res) => {
     const { result } = req.body;
 
     game.result = result;
@@ -251,12 +298,12 @@ app.post("/admin/open", async (req, res) => {
 
     await broadcast();
     res.json({ success: true });
-});
+}));
 
 // =======================
-// next round（修复404关键）
+// 下一轮（关键修复）
 // =======================
-app.post("/admin/next", async (req, res) => {
+app.post("/admin/next", safe(async (req, res) => {
     game.result = "等待开奖";
     game.betting = true;
     game.countdown = 20;
@@ -265,13 +312,14 @@ app.post("/admin/next", async (req, res) => {
     await game.save();
 
     io.emit("game-next", game);
-    await broadcast();
 
+    await broadcast();
     res.json({ success: true });
-});
+}));
 
 // =======================
-server.listen(process.env.PORT || 3000, async () => {
-    await init();
-    console.log("Server running");
+// 启动
+// =======================
+server.listen(process.env.PORT || 3000, () => {
+    console.log("🚀 Server running");
 });
