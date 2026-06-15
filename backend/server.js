@@ -4,6 +4,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const { v4: uuid } = require("uuid");
+const crypto = require("crypto");
 
 const app = express();
 
@@ -26,71 +27,82 @@ const io = new Server(server, {
 });
 
 // =======================
+// ENV（修复 GitHub secret warning关键点）
+// =======================
+const MONGO_URL = process.env.MONGO_URL;
+
+// ❗ 不再写死任何密码
+if (!MONGO_URL) {
+    console.error("MONGO_URL not set");
+}
+
+// =======================
 // Mongo
 // =======================
-const MONGO_URL =
-    process.env.MONGO_URL ||
-    process.env.MONGODB_URI;
-
 mongoose.connect(MONGO_URL)
     .then(() => console.log("Mongo connected"))
     .catch(err => console.log(err.message));
 
 // =======================
-// 玩家（升级）
+// TOKEN STORE（轻量登录系统）
+// =======================
+const tokenMap = new Map();
+
+function createToken(playerId) {
+    const token = crypto.randomBytes(16).toString("hex");
+    tokenMap.set(token, playerId);
+    return token;
+}
+
+function auth(req) {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    return tokenMap.get(token);
+}
+
+// =======================
+// Schema（增强版）
 // =======================
 const PlayerSchema = new mongoose.Schema({
     id: { type: String, default: uuid },
     name: String,
     balance: { type: Number, default: 0 },
 
-    password: String,      // 4位房间密码
-    remark: String,        // 后台备注
-    roomId: String,        // 房间
+    password: String,
+    remark: String,
+    roomId: String,
 
     status: { type: String, default: "online" }
 });
 
-// =======================
-// 下注（批次系统）
-// =======================
 const RecordSchema = new mongoose.Schema({
     playerId: String,
     playerName: String,
     option: String,
     amount: Number,
-
-    round: Number,        // 当前轮次
-    sessionId: String,    // 关键：一轮下注集合
-
+    round: Number,
+    sessionId: String,
     result: { type: String, default: "等待开奖" },
     balanceAfter: Number,
-
     time: { type: Date, default: Date.now }
 });
 
-// =======================
-// 游戏
-// =======================
 const GameSchema = new mongoose.Schema({
     result: String,
     betting: Boolean,
     countdown: Number,
     round: Number,
-
-    sessionId: String   // 🔥 当前轮ID
+    sessionId: String
 });
 
 const Player = mongoose.model("Player", PlayerSchema);
 const Record = mongoose.model("Record", RecordSchema);
 const Game = mongoose.model("Game", GameSchema);
 
-// =======================
 let game;
 let timer;
 
 // =======================
-// init
+// INIT
 // =======================
 async function init() {
     game = await Game.findOne();
@@ -108,7 +120,7 @@ async function init() {
 }
 
 // =======================
-// 倒计时系统（稳定版）
+// 倒计时
 // =======================
 function startTimer() {
     if (timer) clearInterval(timer);
@@ -117,7 +129,7 @@ function startTimer() {
         if (!game) return;
 
         if (game.betting && game.countdown > 0) {
-            game.countdown -= 1;
+            game.countdown--;
             await game.save();
             broadcast();
         }
@@ -125,58 +137,53 @@ function startTimer() {
 }
 
 // =======================
-// 广播
+// broadcast
 // =======================
 async function broadcast() {
-    if (!game) return;
-
     const players = await Player.find();
     const records = await Record.find().sort({ time: -1 });
 
-    io.emit("update", {
-        players,
-        records,
-        game
-    });
+    io.emit("update", { players, records, game });
 }
 
 // =======================
-// socket同步
+// SOCKET
 // =======================
-io.on("connection", socket => {
-    broadcast();
-});
+io.on("connection", () => broadcast());
 
 // =======================
-// API安全包装
+// 🔐 登录接口（核心新增）
 // =======================
-const safe = fn => async (req, res) => {
-    try {
-        await fn(req, res);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-};
-
-// =======================
-// 玩家登录（新增：密码进入）
-// =======================
-app.post("/api/login", safe(async (req, res) => {
+app.post("/api/login", async (req, res) => {
     const { password } = req.body;
 
     const player = await Player.findOne({ password });
 
     if (!player) {
-        return res.json({ success: false });
+        return res.json({ success: false, msg: "密码错误" });
     }
 
-    res.json({ success: true, player });
-}));
+    const token = createToken(player.id);
+
+    res.json({
+        success: true,
+        token,
+        player
+    });
+});
 
 // =======================
-// 创建/更新玩家（不改UI）
+// 玩家接口（兼容旧UI）
 // =======================
-app.post("/admin/update-player", safe(async (req, res) => {
+app.get("/api/player/:id", async (req, res) => {
+    const p = await Player.findOne({ id: req.params.id });
+    res.json(p || { id: req.params.id, balance: 0 });
+});
+
+// =======================
+// update player（后台）
+// =======================
+app.post("/admin/update-player", async (req, res) => {
     const { id, name, balance, remark } = req.body;
 
     let player = await Player.findOne({ id });
@@ -197,15 +204,18 @@ app.post("/admin/update-player", safe(async (req, res) => {
         await player.save();
     }
 
-    broadcast();
+    await broadcast();
     res.json({ success: true, player });
-}));
+});
 
 // =======================
-// 下注（支持多笔 + session）
+// bet（增强安全）
 // =======================
-app.post("/api/bets", safe(async (req, res) => {
-    const { playerId, option, amount } = req.body;
+app.post("/api/bets", async (req, res) => {
+
+    const playerId = auth(req) || req.body.playerId;
+
+    const { option, amount } = req.body;
 
     const player = await Player.findOne({ id: playerId });
     if (!player) return res.json({ success: false });
@@ -226,14 +236,16 @@ app.post("/api/bets", safe(async (req, res) => {
         balanceAfter: player.balance
     });
 
-    broadcast();
-    res.json({ success: true });
-}));
+    await broadcast();
+
+    res.json({ success: true, balance: player.balance });
+});
 
 // =======================
-// 开奖（统一）
+// open（统一开奖）
 // =======================
-app.post("/admin/open", safe(async (req, res) => {
+app.post("/admin/open", async (req, res) => {
+
     const { result } = req.body;
 
     game.result = result;
@@ -265,29 +277,29 @@ app.post("/admin/open", safe(async (req, res) => {
         await r.save();
     }
 
-    broadcast();
+    await broadcast();
     res.json({ success: true });
-}));
+});
 
 // =======================
-// 下一轮（关键升级）
+// next round
 // =======================
-app.post("/admin/next", safe(async (req, res) => {
+app.post("/admin/next", async (req, res) => {
 
-    game.round += 1;
+    game.round++;
     game.result = "等待开奖";
     game.betting = true;
     game.countdown = 20;
-    game.sessionId = uuid(); // 🔥 新轮次
+    game.sessionId = uuid();
 
     await game.save();
 
     io.emit("game-next", game);
 
-    broadcast();
+    await broadcast();
 
     res.json({ success: true });
-}));
+});
 
 // =======================
 server.listen(process.env.PORT || 3000, async () => {
