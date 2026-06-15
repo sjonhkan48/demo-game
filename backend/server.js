@@ -1,914 +1,249 @@
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
-const {Server}=require("socket.io");
-const mongoose=require("mongoose");
-const {v4:uuid}=require("uuid");
+const { Server } = require("socket.io");
+const mongoose = require("mongoose");
+const { v4: uuid } = require("uuid");
 
+const app = express();
 
-const app=express();
-
-
-// ========================
-// CORS
-// ========================
-
-
+// =======================
+// CORS（必须稳定写法）
+// =======================
 app.use(cors({
-
-origin:[
-"https://demo-game-2.onrender.com",
-"https://demo-game-3.onrender.com"
-],
-
-methods:[
-"GET",
-"POST",
-"PUT",
-"DELETE",
-"OPTIONS"
-],
-
-credentials:true
-
+    origin: [
+        "https://demo-game-2.onrender.com",
+        "https://demo-game-3.onrender.com"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true
 }));
 
-
-app.options("*",cors());
-
+app.options("*", cors());
 app.use(express.json());
 
+const server = http.createServer(app);
 
-
-const server=http.createServer(app);
-
-
-
-const io=new Server(server,{
-
-cors:{
-origin:"*"
-}
-
+const io = new Server(server, {
+    cors: {
+        origin: "*"
+    }
 });
 
+// =======================
+// MongoDB（关键修复）
+// =======================
+const MONGO_URL = process.env.MONGO_URL;
 
-
-
-
-// ========================
-// MongoDB
-// ========================
-
-
-const MONGO_URL =
-process.env.MONGO_URL ||
-"mongodb+srv://admin:admin3467@cluster0.sg5qkck.mongodb.net/game";
-
-
+if (!MONGO_URL) {
+    console.error("❌ MONGO_URL 未配置！");
+}
 
 mongoose.connect(MONGO_URL)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.log("❌ Mongo error:", err.message));
 
-.then(()=>{
-
-console.log("MongoDB connected");
-
-init();
-
-})
-
-.catch(err=>{
-
-console.log("Mongo Error:",err);
-
+// =======================
+// Schema
+// =======================
+const PlayerSchema = new mongoose.Schema({
+    id: { type: String, default: uuid },
+    name: String,
+    balance: { type: Number, default: 0 }
 });
 
+const RecordSchema = new mongoose.Schema({
+    playerId: String,
+    playerName: String,
+    option: String,
+    amount: Number,
+    result: { type: String, default: "等待开奖" },
+    time: { type: Date, default: Date.now }
+});
 
+const GameSchema = new mongoose.Schema({
+    result: { type: String, default: "等待开奖" },
+    betting: { type: Boolean, default: true },
+    countdown: { type: Number, default: 20 },
+    round: { type: Number, default: 1 }
+});
 
+const Player = mongoose.model("Player", PlayerSchema);
+const Record = mongoose.model("Record", RecordSchema);
+const Game = mongoose.model("Game", GameSchema);
 
+// =======================
+let game = null;
 
-// ========================
-// Models
-// ========================
-
-
-
-const PlayerSchema=new mongoose.Schema({
-
-id:{
-type:String,
-default:()=>uuid()
-},
-
-name:String,
-
-balance:{
-type:Number,
-default:0
-},
-
-status:{
-type:String,
-default:"在线"
+// =======================
+async function init() {
+    game = await Game.findOne();
+    if (!game) game = await Game.create({});
+    console.log("Game ready");
 }
 
-});
+// =======================
+async function broadcast() {
+    if (!game) return;
 
+    const players = await Player.find();
+    const records = await Record.find().sort({ time: -1 });
 
-
-
-const RecordSchema=new mongoose.Schema({
-
-playerId:String,
-
-playerName:String,
-
-option:String,
-
-amount:Number,
-
-
-result:{
-type:String,
-default:"等待开奖"
-},
-
-
-time:{
-type:Date,
-default:Date.now
+    io.emit("update", {
+        players,
+        records,
+        game
+    });
 }
 
+// =======================
+// socket
+// =======================
+io.on("connection", () => {
+    broadcast();
 });
 
-
-
-
-const GameSchema=new mongoose.Schema({
-
-result:{
-type:String,
-default:"等待开奖"
-},
-
-
-betting:{
-type:Boolean,
-default:true
-},
-
-
-countdown:{
-type:Number,
-default:20
-},
-
-
-round:{
-type:Number,
-default:1
-}
-
-
+// =======================
+// API
+// =======================
+app.get("/", (req, res) => {
+    res.send("GAME SERVER RUNNING");
 });
 
-
-
-
-
-const Player =
-mongoose.model(
-"Player",
-PlayerSchema
-);
-
-
-const Record =
-mongoose.model(
-"Record",
-RecordSchema
-);
-
-
-const Game =
-mongoose.model(
-"Game",
-GameSchema
-);
-
-
-
-
-
-let game=null;
-
-
-
-
-
-// ========================
-// 初始化
-// ========================
-
-
-async function init(){
-
-
-game=await Game.findOne();
-
-
-if(!game){
-
-game=await Game.create({});
-
-}
-
-
-console.log("Game ready");
-
-
-}
-
-
-
-
-
-
-
-// ========================
-// 广播
-// ========================
-
-
-async function broadcast(){
-
-
-if(!game)return;
-
-
-
-const players=
-await Player.find();
-
-
-const records=
-await Record.find()
-.sort({
-time:-1
+// players
+app.get("/api/players", async (req, res) => {
+    res.json(await Player.find());
 });
 
-
-
-io.emit(
-
-"update",
-
-{
-
-players,
-
-records,
-
-game
-
-}
-
-
-);
-
-
-}
-
-
-
-
-
-io.on(
-
-"connection",
-
-socket=>{
-
-
-broadcast();
-
-
+// player
+app.get("/api/player/:id", async (req, res) => {
+    const p = await Player.findOne({ id: req.params.id });
+    res.json(p || { id: req.params.id, balance: 0 });
 });
 
-
-
-
-
-
-
-
-
-// ========================
-// 首页
-// ========================
-
-
-app.get("/",(req,res)=>{
-
-
-res.send(
-"GAME SERVER RUNNING"
-);
-
-
+// records
+app.get("/api/records", async (req, res) => {
+    res.json(await Record.find().sort({ time: -1 }));
 });
 
+// =======================
+// update player
+// =======================
+app.post("/admin/update-player", async (req, res) => {
+    const { id, name, balance } = req.body;
 
+    let player = await Player.findOne({ id });
 
+    if (!player) {
+        player = await Player.create({
+            id: id || uuid(),
+            name,
+            balance: Number(balance || 0)
+        });
+    } else {
+        player.name = name;
+        player.balance = Number(balance || 0);
+        await player.save();
+    }
 
+    await broadcast();
 
-
-
-
-
-// ========================
-// 玩家列表
-// ========================
-
-
-app.get(
-
-"/api/players",
-
-async(req,res)=>{
-
-
-const data =
-await Player.find();
-
-
-res.json(data);
-
-
+    res.json({ success: true, player });
 });
 
+// =======================
+// bet
+// =======================
+app.post("/api/bets", async (req, res) => {
+    const { playerId, option, amount } = req.body;
 
+    const player = await Player.findOne({ id: playerId });
 
+    if (!player) return res.json({ success: false });
 
+    if (player.balance < amount)
+        return res.json({ success: false, msg: "余额不足" });
 
+    player.balance -= Number(amount);
+    await player.save();
 
+    await Record.create({
+        playerId,
+        playerName: player.name,
+        option,
+        amount: Number(amount),
+        result: "等待开奖"
+    });
 
+    await broadcast();
 
-
-// ========================
-// 玩家
-// ========================
-
-
-
-app.get(
-
-"/api/player/:id",
-
-async(req,res)=>{
-
-
-const p=
-
-await Player.findOne({
-
-id:req.params.id
-
+    res.json({ success: true });
 });
 
+// =======================
+// open
+// =======================
+app.post("/admin/open", async (req, res) => {
+    const { result } = req.body;
 
+    game.result = result;
+    game.betting = false;
+    await game.save();
 
-res.json(
+    const odds = {
+        "闲": 1,
+        "和": 8,
+        "庄": 0.95
+    };
 
-p ||
+    const records = await Record.find({ result: "等待开奖" });
 
-{
+    for (let r of records) {
+        const player = await Player.findOne({ id: r.playerId });
 
-id:req.params.id,
+        if (r.option === result) {
+            const win =
+                Number(r.amount) +
+                Number(r.amount) * Number(odds[result]);
 
-balance:0
+            r.result = "中奖 +" + win;
 
-}
+            if (player) {
+                player.balance += win;
+                await player.save();
+            }
+        } else {
+            r.result = "未中奖";
+        }
 
-);
+        await r.save();
+    }
 
+    await broadcast();
 
+    res.json({ success: true });
 });
 
+// =======================
+// next round（关键）
+// =======================
+app.post("/admin/next", async (req, res) => {
+    game.result = "等待开奖";
+    game.betting = true;
+    game.countdown = 20;
+    game.round += 1;
 
+    await game.save();
 
+    io.emit("game-next", game);
 
+    await broadcast();
 
-
-
-
-
-// ========================
-// 玩家记录
-// ========================
-
-
-
-app.get(
-
-"/api/records/:playerId",
-
-async(req,res)=>{
-
-
-const data =
-
-await Record.find({
-
-playerId:req.params.playerId
-
-})
-
-.sort({
-
-time:-1
-
+    res.json({ success: true });
 });
 
-
-res.json(data);
-
-
-});
-
-
-
-
-
-
-
-
-
-// ========================
-// 创建玩家
-// ========================
-
-
-
-app.post(
-
-"/admin/update-player",
-
-async(req,res)=>{
-
-
-const {
-
-id,
-
-name,
-
-balance
-
-}=req.body;
-
-
-
-
-let player =
-
-await Player.findOne({
-
-id
-
-});
-
-
-
-
-
-if(!player){
-
-
-player =
-await Player.create({
-
-id:id || uuid(),
-
-name,
-
-balance:Number(balance)||0
-
-
-});
-
-
-}else{
-
-
-player.name=name;
-
-player.balance=
-Number(balance)||0;
-
-
-await player.save();
-
-
-}
-
-
-
-
-await broadcast();
-
-
-res.json({
-
-success:true,
-
-player
-
-});
-
-
-});
-
-
-
-
-
-
-
-
-
-// ========================
-// 投注
-// ========================
-
-
-app.post(
-
-"/api/bets",
-
-async(req,res)=>{
-
-
-const {
-
-playerId,
-
-option,
-
-amount
-
-}=req.body;
-
-
-
-
-const player=
-
-await Player.findOne({
-
-id:playerId
-
-});
-
-
-
-if(!player)
-
-return res.json({
-
-success:false
-
-});
-
-
-
-
-
-if(player.balance < amount)
-
-return res.json({
-
-success:false,
-
-msg:"余额不足"
-
-});
-
-
-
-
-
-player.balance -= Number(amount);
-
-
-await player.save();
-
-
-
-
-await Record.create({
-
-playerId,
-
-playerName:player.name,
-
-option,
-
-amount:Number(amount),
-
-result:"等待开奖"
-
-});
-
-
-
-
-await broadcast();
-
-
-
-res.json({
-
-success:true,
-
-balance:player.balance
-
-});
-
-
-
-});
-
-
-
-
-
-
-
-
-
-// ========================
-// 开奖
-// ========================
-
-
-app.post(
-
-"/admin/open",
-
-async(req,res)=>{
-
-
-const {
-
-result
-
-}=req.body;
-
-
-
-
-game.result=result;
-
-game.betting=false;
-
-
-
-await game.save();
-
-
-
-
-
-const odds={
-
-
-"闲":1,
-
-
-"和":8,
-
-
-"庄":0.95
-
-
-};
-
-
-
-
-
-const records=
-
-await Record.find({
-
-result:"等待开奖"
-
-});
-
-
-
-
-
-for(let r of records){
-
-
-
-const player=
-
-await Player.findOne({
-
-id:r.playerId
-
-});
-
-
-
-if(r.option===result){
-
-
-
-const win =
-
-Number(r.amount)
-
-+
-
-Number(r.amount)*
-
-Number(odds[result]);
-
-
-
-
-
-r.result=
-"中奖 +" + win;
-
-
-
-
-if(player){
-
-
-player.balance += win;
-
-
-await player.save();
-
-
-}
-
-
-
-}else{
-
-
-r.result="未中奖";
-
-
-}
-
-
-
-await r.save();
-
-
-}
-
-
-
-
-
-await broadcast();
-
-
-
-res.json({
-
-success:true
-
-});
-
-
-
-});
-
-
-
-
-
-
-
-
-
-// ========================
-// 下一轮
-// ========================
-
-
-app.post(
-
-"/admin/next",
-
-async(req,res)=>{
-
-
-game.result="等待开奖";
-
-
-game.betting=true;
-
-
-game.countdown=20;
-
-
-game.round++;
-
-
-
-await game.save();
-
-
-
-io.emit(
-
-"player-next",
-
-game
-
-);
-
-
-
-await broadcast();
-
-
-
-res.json({
-
-success:true
-
-});
-
-
-
-});
-
-
-
-
-
-
-
-
-
-// ========================
-// 全部记录
-// ========================
-
-
-app.get(
-
-"/api/records",
-
-async(req,res)=>{
-
-
-const data=
-
-await Record.find()
-
-.sort({
-
-time:-1
-
-});
-
-
-res.json(data);
-
-
-});
-
-
-
-
-
-
-
-server.listen(
-
-process.env.PORT || 3000,
-
-()=>{
-
-
-console.log(
-
-"Server running"
-
-);
-
-
+// =======================
+server.listen(process.env.PORT || 3000, async () => {
+    await init();
+    console.log("Server running");
 });
