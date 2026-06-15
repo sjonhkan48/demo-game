@@ -6,66 +6,69 @@ const mongoose = require("mongoose");
 const { v4: uuid } = require("uuid");
 
 const app = express();
+const server = http.createServer(app);
 
-// =====================
+// =======================
 // CORS（生产稳定版）
-// =====================
-const allowedOrigins = [
+// =======================
+const allowOrigins = [
     "https://demo-game-2.onrender.com",
     "https://demo-game-3.onrender.com"
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(null, true); // 临时放开（避免CORS炸服）
+        if (!origin) return callback(null, true);
+        if (allowOrigins.includes(origin)) {
+            return callback(null, true);
         }
+        return callback(null, true); // 避免 Render + mobile 出问题
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
 app.options("*", cors());
 app.use(express.json());
 
-// =====================
-// Server + Socket
-// =====================
-const server = http.createServer(app);
-
+// =======================
+// Socket
+// =======================
 const io = new Server(server, {
-    cors: {
-        origin: "*"
-    }
+    cors: { origin: "*" }
 });
 
-// =====================
-// MongoDB（关键稳定版）
-// =====================
+// =======================
+// Mongo
+// =======================
 const MONGO_URL = process.env.MONGO_URL;
 
 if (!MONGO_URL) {
-    console.error("❌ MONGO_URL 未配置");
+    console.error("❌ MONGO_URL missing");
 }
 
-mongoose.connect(MONGO_URL)
-    .then(() => {
-        console.log("✅ MongoDB connected");
-        init();
-    })
-    .catch(err => {
-        console.error("❌ Mongo error:", err.message);
-    });
+mongoose.set("strictQuery", true);
 
-// =====================
+async function connectDB() {
+    try {
+        await mongoose.connect(MONGO_URL);
+        console.log("✅ MongoDB connected");
+    } catch (err) {
+        console.log("❌ Mongo error:", err.message);
+        setTimeout(connectDB, 5000);
+    }
+}
+connectDB();
+
+// =======================
 // Schema
-// =====================
+// =======================
 const PlayerSchema = new mongoose.Schema({
     id: { type: String, default: uuid },
     name: String,
-    balance: { type: Number, default: 0 }
+    balance: { type: Number, default: 0 },
+    password: String,     // ⭐ 新增
+    remark: String        // ⭐ 新增
 });
 
 const RecordSchema = new mongoose.Schema({
@@ -74,7 +77,8 @@ const RecordSchema = new mongoose.Schema({
     option: String,
     amount: Number,
     result: { type: String, default: "等待开奖" },
-    time: { type: Date, default: Date.now }
+    time: { type: Date, default: Date.now },
+    round: Number
 });
 
 const GameSchema = new mongoose.Schema({
@@ -88,38 +92,67 @@ const Player = mongoose.model("Player", PlayerSchema);
 const Record = mongoose.model("Record", RecordSchema);
 const Game = mongoose.model("Game", GameSchema);
 
-// =====================
+// =======================
+// game state
+// =======================
 let game = null;
 
+// =======================
+// init
+// =======================
 async function init() {
     game = await Game.findOne();
     if (!game) game = await Game.create({});
-    console.log("🎮 Game ready");
+    console.log("Game ready");
 }
 
-// =====================
+// =======================
+// broadcast
+// =======================
 async function broadcast() {
-    try {
-        const players = await Player.find();
-        const records = await Record.find().sort({ time: -1 });
+    if (!game) return;
 
-        io.emit("update", {
-            players,
-            records,
-            game
-        });
-    } catch (err) {
-        console.log("broadcast error:", err.message);
-    }
+    const players = await Player.find();
+    const records = await Record.find().sort({ time: -1 });
+
+    io.emit("update", { players, records, game });
 }
 
-// =====================
+// =======================
+// countdown engine（关键新增）
+// =======================
+setInterval(async () => {
+    if (!game) return;
+    if (!game.betting) return;
+
+    game.countdown -= 1;
+
+    if (game.countdown <= 0) {
+        game.countdown = 20;
+        game.round += 1;
+    }
+
+    await game.save();
+    io.emit("update", { game });
+}, 1000);
+
+// =======================
+// socket
+// =======================
+io.on("connection", (socket) => {
+    broadcast();
+});
+
+// =======================
 // routes
-// =====================
+// =======================
 app.get("/", (req, res) => {
     res.send("GAME SERVER RUNNING");
 });
 
+// =======================
+// players
+// =======================
 app.get("/api/players", async (req, res) => {
     res.json(await Player.find());
 });
@@ -129,15 +162,11 @@ app.get("/api/player/:id", async (req, res) => {
     res.json(p || { id: req.params.id, balance: 0 });
 });
 
-app.get("/api/records", async (req, res) => {
-    res.json(await Record.find().sort({ time: -1 }));
-});
-
-// =====================
-// update player
-// =====================
+// =======================
+// create/update player（含密码）
+// =======================
 app.post("/admin/update-player", async (req, res) => {
-    const { id, name, balance } = req.body;
+    const { id, name, balance, password, remark } = req.body;
 
     let player = await Player.findOne({ id });
 
@@ -145,11 +174,15 @@ app.post("/admin/update-player", async (req, res) => {
         player = await Player.create({
             id: id || uuid(),
             name,
-            balance: Number(balance || 0)
+            balance: Number(balance || 0),
+            password: password || String(Math.floor(1000 + Math.random() * 9000)),
+            remark: remark || ""
         });
     } else {
         player.name = name;
         player.balance = Number(balance || 0);
+        player.password = password || player.password;
+        player.remark = remark || player.remark;
         await player.save();
     }
 
@@ -157,7 +190,9 @@ app.post("/admin/update-player", async (req, res) => {
     res.json({ success: true, player });
 });
 
-// =====================
+// =======================
+// bet
+// =======================
 app.post("/api/bets", async (req, res) => {
     const { playerId, option, amount } = req.body;
 
@@ -174,15 +209,69 @@ app.post("/api/bets", async (req, res) => {
         playerId,
         playerName: player.name,
         option,
-        amount,
-        result: "等待开奖"
+        amount: Number(amount),
+        round: game?.round || 1
     });
+
+    await broadcast();
+    res.json({ success: true, balance: player.balance });
+});
+
+// =======================
+// open
+// =======================
+app.post("/admin/open", async (req, res) => {
+    const { result } = req.body;
+
+    game.result = result;
+    game.betting = false;
+    await game.save();
+
+    const odds = { "闲": 1, "和": 8, "庄": 0.95 };
+
+    const records = await Record.find({ result: "等待开奖" });
+
+    for (let r of records) {
+        const player = await Player.findOne({ id: r.playerId });
+
+        if (r.option === result) {
+            const win = Number(r.amount) + Number(r.amount) * odds[result];
+            r.result = "中奖 +" + win;
+
+            if (player) {
+                player.balance += win;
+                await player.save();
+            }
+        } else {
+            r.result = "未中奖";
+        }
+
+        await r.save();
+    }
 
     await broadcast();
     res.json({ success: true });
 });
 
-// =====================
+// =======================
+// next round（修复404关键）
+// =======================
+app.post("/admin/next", async (req, res) => {
+    game.result = "等待开奖";
+    game.betting = true;
+    game.countdown = 20;
+    game.round += 1;
+
+    await game.save();
+
+    io.emit("game-next", game);
+    await broadcast();
+
+    res.json({ success: true });
+});
+
+// =======================
 server.listen(process.env.PORT || 3000, async () => {
-    console.log("🚀 Server running");
+    await init();
+    console.log("Server running");
 });
