@@ -8,7 +8,7 @@ const { v4: uuid } = require("uuid");
 const app = express();
 
 // =======================
-// CORS（必须稳定写法）
+// CORS（稳定生产写法）
 // =======================
 app.use(cors({
     origin: [
@@ -31,12 +31,12 @@ const io = new Server(server, {
 });
 
 // =======================
-// MongoDB（关键修复）
+// MongoDB（关键：只允许环境变量）
 // =======================
 const MONGO_URL = process.env.MONGO_URL;
 
 if (!MONGO_URL) {
-    console.error("❌ MONGO_URL 未配置！");
+    console.error("❌ MONGO_URL 未配置（Render 环境变量缺失）");
 }
 
 mongoose.connect(MONGO_URL)
@@ -76,12 +76,16 @@ const Game = mongoose.model("Game", GameSchema);
 let game = null;
 
 // =======================
+// 初始化
+// =======================
 async function init() {
     game = await Game.findOne();
     if (!game) game = await Game.create({});
     console.log("Game ready");
 }
 
+// =======================
+// 广播
 // =======================
 async function broadcast() {
     if (!game) return;
@@ -104,30 +108,30 @@ io.on("connection", () => {
 });
 
 // =======================
-// API
+// health check
 // =======================
 app.get("/", (req, res) => {
     res.send("GAME SERVER RUNNING");
 });
 
-// players
+// =======================
+// API
+// =======================
 app.get("/api/players", async (req, res) => {
     res.json(await Player.find());
 });
 
-// player
 app.get("/api/player/:id", async (req, res) => {
     const p = await Player.findOne({ id: req.params.id });
     res.json(p || { id: req.params.id, balance: 0 });
 });
 
-// records
 app.get("/api/records", async (req, res) => {
     res.json(await Record.find().sort({ time: -1 }));
 });
 
 // =======================
-// update player
+// admin create/update player
 // =======================
 app.post("/admin/update-player", async (req, res) => {
     const { id, name, balance } = req.body;
@@ -181,7 +185,7 @@ app.post("/api/bets", async (req, res) => {
 });
 
 // =======================
-// open
+// open result
 // =======================
 app.post("/admin/open", async (req, res) => {
     const { result } = req.body;
@@ -225,7 +229,7 @@ app.post("/admin/open", async (req, res) => {
 });
 
 // =======================
-// next round（关键）
+// next round
 // =======================
 app.post("/admin/next", async (req, res) => {
     game.result = "等待开奖";
