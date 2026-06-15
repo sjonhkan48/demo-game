@@ -8,7 +8,7 @@ const { v4: uuid } = require("uuid");
 const app = express();
 
 // =======================
-// CORS（稳定生产写法）
+// CORS（稳定生产级）
 // =======================
 app.use(cors({
     origin: [
@@ -24,24 +24,43 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
+// =======================
+// Socket.IO（稳定版）
+// =======================
 const io = new Server(server, {
     cors: {
-        origin: "*"
+        origin: "*",
+        methods: ["GET", "POST"]
     }
 });
 
 // =======================
-// MongoDB（关键：只允许环境变量）
+// MongoDB（稳定连接版）
 // =======================
 const MONGO_URL = process.env.MONGO_URL;
 
+let mongoReady = false;
+
 if (!MONGO_URL) {
-    console.error("❌ MONGO_URL 未配置（Render 环境变量缺失）");
+    console.error("❌ MONGO_URL 未配置");
 }
 
-mongoose.connect(MONGO_URL)
-    .then(() => console.log("✅ MongoDB connected"))
-    .catch(err => console.log("❌ Mongo error:", err.message));
+// 防止 Render 冷启动崩溃
+async function connectMongo() {
+    try {
+        await mongoose.connect(MONGO_URL, {
+            serverSelectionTimeoutMS: 5000
+        });
+        mongoReady = true;
+        console.log("✅ MongoDB connected");
+        await init();
+    } catch (err) {
+        console.error("❌ Mongo error:", err.message);
+        setTimeout(connectMongo, 5000); // 自动重试
+    }
+}
+
+connectMongo();
 
 // =======================
 // Schema
@@ -72,32 +91,38 @@ const Player = mongoose.model("Player", PlayerSchema);
 const Record = mongoose.model("Record", RecordSchema);
 const Game = mongoose.model("Game", GameSchema);
 
-// =======================
 let game = null;
 
 // =======================
-// 初始化
+// init（安全版）
 // =======================
 async function init() {
+    if (!mongoReady) return;
+
     game = await Game.findOne();
     if (!game) game = await Game.create({});
-    console.log("Game ready");
+
+    console.log("🎮 Game ready");
 }
 
 // =======================
-// 广播
+// broadcast（防崩版）
 // =======================
 async function broadcast() {
-    if (!game) return;
+    if (!mongoReady || !game) return;
 
-    const players = await Player.find();
-    const records = await Record.find().sort({ time: -1 });
+    try {
+        const players = await Player.find();
+        const records = await Record.find().sort({ time: -1 });
 
-    io.emit("update", {
-        players,
-        records,
-        game
-    });
+        io.emit("update", {
+            players,
+            records,
+            game
+        });
+    } catch (err) {
+        console.error("broadcast error:", err.message);
+    }
 }
 
 // =======================
@@ -115,25 +140,40 @@ app.get("/", (req, res) => {
 });
 
 // =======================
+// safe wrapper（防 502）
+// =======================
+const safe = (fn) => async (req, res) => {
+    try {
+        if (!mongoReady) {
+            return res.status(503).json({ error: "DB not ready" });
+        }
+        await fn(req, res);
+    } catch (err) {
+        console.error("API error:", err.message);
+        res.status(500).json({ error: "server error" });
+    }
+};
+
+// =======================
 // API
 // =======================
-app.get("/api/players", async (req, res) => {
+app.get("/api/players", safe(async (req, res) => {
     res.json(await Player.find());
-});
+}));
 
-app.get("/api/player/:id", async (req, res) => {
+app.get("/api/player/:id", safe(async (req, res) => {
     const p = await Player.findOne({ id: req.params.id });
     res.json(p || { id: req.params.id, balance: 0 });
-});
+}));
 
-app.get("/api/records", async (req, res) => {
+app.get("/api/records", safe(async (req, res) => {
     res.json(await Record.find().sort({ time: -1 }));
-});
+}));
 
 // =======================
-// admin create/update player
+// update player
 // =======================
-app.post("/admin/update-player", async (req, res) => {
+app.post("/admin/update-player", safe(async (req, res) => {
     const { id, name, balance } = req.body;
 
     let player = await Player.findOne({ id });
@@ -151,18 +191,16 @@ app.post("/admin/update-player", async (req, res) => {
     }
 
     await broadcast();
-
     res.json({ success: true, player });
-});
+}));
 
 // =======================
 // bet
 // =======================
-app.post("/api/bets", async (req, res) => {
+app.post("/api/bets", safe(async (req, res) => {
     const { playerId, option, amount } = req.body;
 
     const player = await Player.findOne({ id: playerId });
-
     if (!player) return res.json({ success: false });
 
     if (player.balance < amount)
@@ -180,25 +218,20 @@ app.post("/api/bets", async (req, res) => {
     });
 
     await broadcast();
-
     res.json({ success: true });
-});
+}));
 
 // =======================
-// open result
+// open
 // =======================
-app.post("/admin/open", async (req, res) => {
+app.post("/admin/open", safe(async (req, res) => {
     const { result } = req.body;
 
     game.result = result;
     game.betting = false;
     await game.save();
 
-    const odds = {
-        "闲": 1,
-        "和": 8,
-        "庄": 0.95
-    };
+    const odds = { "闲": 1, "和": 8, "庄": 0.95 };
 
     const records = await Record.find({ result: "等待开奖" });
 
@@ -206,10 +239,7 @@ app.post("/admin/open", async (req, res) => {
         const player = await Player.findOne({ id: r.playerId });
 
         if (r.option === result) {
-            const win =
-                Number(r.amount) +
-                Number(r.amount) * Number(odds[result]);
-
+            const win = Number(r.amount) + Number(r.amount) * Number(odds[result]);
             r.result = "中奖 +" + win;
 
             if (player) {
@@ -224,14 +254,13 @@ app.post("/admin/open", async (req, res) => {
     }
 
     await broadcast();
-
     res.json({ success: true });
-});
+}));
 
 // =======================
 // next round
 // =======================
-app.post("/admin/next", async (req, res) => {
+app.post("/admin/next", safe(async (req, res) => {
     game.result = "等待开奖";
     game.betting = true;
     game.countdown = 20;
@@ -240,14 +269,14 @@ app.post("/admin/next", async (req, res) => {
     await game.save();
 
     io.emit("game-next", game);
-
     await broadcast();
 
     res.json({ success: true });
-});
+}));
 
 // =======================
-server.listen(process.env.PORT || 3000, async () => {
-    await init();
-    console.log("Server running");
+// start server
+// =======================
+server.listen(process.env.PORT || 3000, () => {
+    console.log("🚀 Server running");
 });
